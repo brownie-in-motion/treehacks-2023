@@ -39,7 +39,7 @@ export const LoginForm = ({ register }) => {
     const form = useForm(choice.form)
     const navigate = useNavigate()
     const { setToken } = useLogin()
-    const [data, fetch] = useFetcher(choice.path)
+    const [data, fetch] = useFetcher()
 
     useEffect(() => {
         if (data.data) {
@@ -69,7 +69,9 @@ export const LoginForm = ({ register }) => {
 
     return (
         <form
-            onSubmit={form.onSubmit((data) => fetch(data, { method: 'POST' }))}
+            onSubmit={form.onSubmit((data) =>
+                fetch(choice.path, { body: data, method: 'POST' })
+            )}
         >
             <Stack spacing="xs">
                 {extra.before}

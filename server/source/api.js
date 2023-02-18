@@ -163,7 +163,7 @@ router.delete('/groups/:id', auth, async (req, res) => {
         res.status(403).json({ error: 'forbidden' })
         return
     }
-    await lithic.deleteCard(group.card_token)
+    await lithic.deleteCard(group.cardToken)
     db.deleteShareGroup(group.id)
     res.json({ ok: true })
 })

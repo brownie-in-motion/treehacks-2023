@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Root } from 'components/root'
 import { useLoaderData } from 'react-router-dom'
 
@@ -17,9 +17,12 @@ import {
     NumberInput,
     useMantineTheme,
 } from '@mantine/core'
+
 import { IconCrown, IconPencil, IconPlus, IconMinus } from '@tabler/icons-react'
 
 import { CreditCard } from 'components/credit-card'
+import { useFetcher } from 'util'
+import { useLogin } from 'util'
 
 export const groupLoader = ({ params }) => {
     return params.id
@@ -40,31 +43,35 @@ const MemberTable = ({ members, current, onEdit }) => {
                 </tr>
             </thead>
             <tbody>
-                {members.map(({ id, email, name, weight, owner }) => (
-                    <tr key={id}>
-                        <td>
-                            <Group spacing="xs">
-                                <Text>{name}</Text>
-                                {owner && <IconCrown size={16} color="gold" />}
-                            </Group>
-                            <Text size="xs" color="gray">
-                                {email}
-                            </Text>
-                        </td>
-                        <td align="right">
-                            <Text>{weight}</Text>
-                        </td>
-                        <td>
-                            {id === current && (
-                                <UnstyledButton onClick={() => onEdit()}>
-                                    <ThemeIcon>
-                                        <IconPencil size={16} />
-                                    </ThemeIcon>
-                                </UnstyledButton>
-                            )}
-                        </td>
-                    </tr>
-                ))}
+                {members.map(
+                    ({ user: { id, email, name }, weight, isOwner }) => (
+                        <tr key={id}>
+                            <td>
+                                <Group spacing="xs">
+                                    <Text>{name}</Text>
+                                    {isOwner && (
+                                        <IconCrown size={16} color="gold" />
+                                    )}
+                                </Group>
+                                <Text size="xs" color="gray">
+                                    {email}
+                                </Text>
+                            </td>
+                            <td align="right">
+                                <Text>{weight}</Text>
+                            </td>
+                            <td>
+                                {id === current && (
+                                    <UnstyledButton onClick={() => onEdit()}>
+                                        <ThemeIcon>
+                                            <IconPencil size={16} />
+                                        </ThemeIcon>
+                                    </UnstyledButton>
+                                )}
+                            </td>
+                        </tr>
+                    )
+                )}
             </tbody>
         </Table>
     )
@@ -91,7 +98,8 @@ const Pie = ({ a, b }) => {
     )
 }
 
-const WeightEdit = ({ id, start, others, onCancel }) => {
+const WeightEdit = ({ start, others, onUpdate, onCancel }) => {
+    const [loading, setLoading] = useState(false)
     const [weight, setWeight] = useState(start)
     const handlers = useRef()
     return (
@@ -135,7 +143,16 @@ const WeightEdit = ({ id, start, others, onCancel }) => {
                 <Button color="red" onClick={() => onCancel()}>
                     Cancel
                 </Button>
-                <Button>Save</Button>
+                <Button
+                    onClick={async () => {
+                        setLoading(true)
+                        await onUpdate(weight)
+                        setLoading(false)
+                    }}
+                    loading={loading}
+                >
+                    Save
+                </Button>
             </Group>
         </Stack>
     )
@@ -143,38 +160,28 @@ const WeightEdit = ({ id, start, others, onCancel }) => {
 
 export const GroupPage = () => {
     const id = useLoaderData()
-
     const [edit, setEdit] = useState(false)
+    const { user } = useLogin()
+    const [response, fetch] = useFetcher()
 
-    const me = '00'
-    const members = [
-        { name: 'John Doe', email: 'jodoe@gmail.com', id: '00', weight: 1 },
-        {
-            name: 'Jane Doe',
-            email: 'jadoe@outlook.com',
-            id: '01',
-            weight: 1,
-            owner: true,
-        },
-        {
-            name: 'Darren Smith',
-            email: 'darren@outlook.com',
-            id: '02',
-            weight: 1,
-        },
-        {
-            name: 'Thomas Anderson',
-            email: 'thomasa@gmail.com',
-            id: '03',
-            weight: 2,
-        },
-    ]
-    members.sort((a, b) => a.name.localeCompare(b.name))
+    const reload = () => fetch(`/api/groups/${id}`, { method: 'GET' })
 
-    // sum of other weights
-    const others = members
-        .filter((m) => m.id !== me)
-        .reduce((acc, m) => acc + m.weight, 0)
+    useEffect(() => {
+        reload()
+    }, [id])
+
+    const { sorted, total, weight } = useMemo(() => {
+        if (!user) return { sorted: [], total: 0 }
+        if (!response.data) return { sorted: [], total: 0 }
+
+        const members = [...response.data.members]
+        members.sort((a, b) => a.name.localeCompare(b.name))
+        const others = members
+            .filter((m) => m.user.id !== user.id)
+            .reduce((acc, m) => acc + m.weight, 0)
+        const me = members.find((m) => m.user.id === user.id)
+        return { sorted: members, total: others, weight: me.weight }
+    }, [response, user])
 
     return (
         <Root selected="home">
@@ -196,17 +203,29 @@ export const GroupPage = () => {
                         <Paper p="xl" radius="md" withBorder>
                             {edit ? (
                                 <WeightEdit
-                                    id={me}
-                                    start={1}
-                                    others={others}
+                                    start={weight}
+                                    others={total}
                                     onCancel={() => setEdit(false)}
+                                    onUpdate={async (weight) => {
+                                        await fetch(
+                                            `/api/groups/${id}/members/me`,
+                                            {
+                                                method: 'PATCH',
+                                                body: { weight },
+                                            }
+                                        )
+                                        await reload()
+                                        setEdit(false)
+                                    }}
                                 />
                             ) : (
-                                <MemberTable
-                                    members={members}
-                                    current={me}
-                                    onEdit={() => setEdit(true)}
-                                />
+                                sorted.length > 0 && (
+                                    <MemberTable
+                                        members={sorted}
+                                        current={user.id}
+                                        onEdit={() => setEdit(true)}
+                                    />
+                                )
                             )}
                         </Paper>
                     </Grid.Col>

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { Group, Text, Paper, UnstyledButton } from '@mantine/core'
 
-export const GroupCard = ({ data: { id, name, members } }) => {
+export const GroupCard = ({ data: { id, name, memberCount } }) => {
     const navigate = useNavigate()
     return (
         <UnstyledButton onClick={() => navigate(`/group/${id}`)}>
@@ -11,7 +11,7 @@ export const GroupCard = ({ data: { id, name, members } }) => {
                     <Text>{name}</Text>
                     <Group ml="auto">
                         <Text>Members:</Text>
-                        <Text>{members.length}</Text>
+                        <Text>{memberCount}</Text>
                     </Group>
                 </Group>
             </Paper>

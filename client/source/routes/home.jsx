@@ -1,21 +1,30 @@
-import { Container, Stack } from '@mantine/core'
+import { useEffect } from 'react'
+
+import { Alert, Container, Stack } from '@mantine/core'
+
+import { useFetcher } from 'util'
 
 import { Root } from 'components/root'
 import { GroupCard } from 'components/group-card'
 
 export const HomePage = () => {
-    const groups = [
-        { name: 'Apartment Spotify', members: ['00', '01', '02'], id: '0' },
-        { name: 'Work Netflix', members: ['10', '11', '12'], id: '1' },
-    ]
+    const [data, fetch] = useFetcher()
+
+    useEffect(() => {
+        fetch('/api/groups')
+    }, [])
+
     return (
         <Root selected="home">
             <Container size="md">
-                <Stack spacing="md">
-                    {groups.map((group) => (
-                        <GroupCard key={group.id} data={group} />
-                    ))}
-                </Stack>
+                {data.data && (
+                    <Stack spacing="md">
+                        {data.data.map((group) => (
+                            <GroupCard key={group.id} data={group} />
+                        ))}
+                    </Stack>
+                )}
+                {data.error && <Alert color="red">{data.error}</Alert>}
             </Container>
         </Root>
     )

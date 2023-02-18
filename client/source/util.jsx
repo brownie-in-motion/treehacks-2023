@@ -38,13 +38,13 @@ export const createForm = {
         name: '',
         description: '',
         limit: 0,
-        duration: 0,
+        duration: undefined,
     },
     validate: {
         name: (value) => (value.length > 5 ? null : TOO_SHORT),
         description: (value) => (value.length > 5 ? null : TOO_SHORT),
         limit: (value) => (value > 0 ? null : NO_LIMIT),
-        duration: (value) => (value > 0 ? null : NO_DURATION),
+        duration: (value) => value === null ? NO_DURATION : null,
     },
 }
 
@@ -119,7 +119,7 @@ export const LoginProvider = ({ children }) => {
 
 export const useLogin = () => useContext(LoginContext)
 
-export const useFetcher = (route) => {
+export const useFetcher = () => {
     const [state, setState] = useState({
         loading: false,
         error: null,
@@ -129,22 +129,23 @@ export const useFetcher = (route) => {
 
     return [
         state,
-        async (data, options) => {
+        async (route, options) => {
             setState({ loading: true, error: null, data: null })
 
             const output = {}
             try {
                 output.response = await fetch(route, {
-                    ...options,
+                    ...(options ?? {}),
                     headers: {
-                        ...options.headers,
+                        ...(options?.headers ?? {}),
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${token}`,
                     },
-                    body: JSON.stringify(data),
+                    body: options?.body && JSON.stringify(options.body),
                 })
                 output.data = await output.response.json()
             } catch (error) {
+                console.error(error)
                 setState({
                     loading: false,
                     error: 'Network error!',
