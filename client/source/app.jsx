@@ -1,8 +1,10 @@
-import React from 'react'
+import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { MantineProvider } from '@mantine/core'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+
+import { LoginProvider } from 'util'
 
 import { HomePage } from 'routes/home'
 import { LoginPage } from 'routes/login'
@@ -21,9 +23,11 @@ const router = createBrowserRouter([
 ])
 
 createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
+    <StrictMode>
         <MantineProvider withGlobalStyles withNormalizeCSS>
-            <RouterProvider router={router} />
+            <LoginProvider>
+                <RouterProvider router={router} />
+            </LoginProvider>
         </MantineProvider>
-    </React.StrictMode>
+    </StrictMode>
 )

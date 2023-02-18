@@ -9,7 +9,7 @@ import {
     Stack,
     Textarea,
     TextInput,
-    Title
+    Title,
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 
@@ -32,7 +32,9 @@ export const CreatePage = () => {
         <Root selected="create">
             <Container>
                 <Paper p="xl" radius="md" withBorder>
-                    <Title order={1} size="h4">Create payment group</Title>
+                    <Title order={1} size="h4">
+                        Create payment group
+                    </Title>
                     <form onSubmit={form.onSubmit((data) => console.log(data))}>
                         <Stack spacing="xs" mt="md">
                             <TextInput

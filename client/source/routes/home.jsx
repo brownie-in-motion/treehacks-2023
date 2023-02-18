@@ -1,5 +1,3 @@
-import React from 'react'
-
 import { Container, Stack } from '@mantine/core'
 
 import { Root } from 'components/root'
@@ -15,7 +13,7 @@ export const HomePage = () => {
             <Container size="md">
                 <Stack spacing="md">
                     {groups.map((group) => (
-                        <GroupCard data={group} />
+                        <GroupCard key={group.id} data={group} />
                     ))}
                 </Stack>
             </Container>
