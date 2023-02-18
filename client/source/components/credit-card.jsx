@@ -41,13 +41,10 @@ export const CreditCard = ({ name, number, expiry, cvv, children }) => {
             shadow="md"
             p="xl"
             radius="md"
-            style={{
-                cursor: 'pointer',
-                maxWidth: 400,
-            }}
+            style={{ cursor: 'pointer' }}
             onClick={() => setRevealed((r) => !r)}
         >
-            <AspectRatio ratio={1.58}>
+            <AspectRatio ratio={1.8}>
                 <div
                     style={{
                         display: 'grid',

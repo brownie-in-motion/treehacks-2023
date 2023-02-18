@@ -1,15 +1,24 @@
 import React from 'react'
-import { Root } from 'components/root'
 
-import { CreditCard } from 'components/credit-card'
+import { Container, Stack } from '@mantine/core'
+
+import { Root } from 'components/root'
+import { GroupCard } from 'components/group-card'
 
 export const HomePage = () => {
-    return <Root selected="home">
-        <CreditCard
-            name="John Doe"
-            number="1234567890123456"
-            expiry="01/23"
-            cvv="123"
-        />
-    </Root>
+    const groups = [
+        { name: 'Apartment Spotify', members: ['00', '01', '02'], id: '0' },
+        { name: 'Work Netflix', members: ['10', '11', '12'], id: '1' },
+    ]
+    return (
+        <Root selected="home">
+            <Container size="md">
+                <Stack spacing="md">
+                    {groups.map((group) => (
+                        <GroupCard data={group} />
+                    ))}
+                </Stack>
+            </Container>
+        </Root>
+    )
 }
