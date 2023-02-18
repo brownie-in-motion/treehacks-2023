@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { MantineProvider } from '@mantine/core'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 
-import { RequireAuth, LoginProvider } from 'util'
+import { RequireAuth, RequireUnauth, LoginProvider } from 'util'
 
 import { HomePage } from 'routes/home'
 import { LoginPage } from 'routes/login'
@@ -14,9 +14,9 @@ import { ScanPage } from 'routes/scan'
 import { GroupPage, groupLoader } from 'routes/group'
 
 const router = createBrowserRouter([
-    { path: '/', element: <HomePage /> },
-    { path: '/login', element: <LoginPage /> },
-    { path: '/register', element: <RegisterPage /> },
+    { path: '/', element: <RequireAuth><HomePage /></RequireAuth> },
+    { path: '/login', element: <RequireUnauth><LoginPage /></RequireUnauth> },
+    { path: '/register', element: <RequireUnauth><RegisterPage /></RequireUnauth> },
     { path: '/create', element: <RequireAuth><CreatePage /></RequireAuth> },
     { path: '/scan', element: <RequireAuth><ScanPage /></RequireAuth> },
     { path: '/group/:id', element: <RequireAuth><GroupPage /></RequireAuth>, loader: groupLoader },

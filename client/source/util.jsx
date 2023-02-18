@@ -181,3 +181,11 @@ export const RequireAuth = ({ children }) => {
     }
     return children
 }
+
+export const RequireUnauth = ({ children }) => {
+    const { token } = useLogin()
+    if (token) {
+        return <Navigate to="/" />
+    }
+    return children
+}
