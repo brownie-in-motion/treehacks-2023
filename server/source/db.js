@@ -11,16 +11,21 @@ db.exec(`
 `)
 
 const getUserStmt = db.prepare('SELECT * FROM users WHERE email = ?')
-export const getUser = email => getUserStmt.get(email)
+export const getUser = (email) => getUserStmt.get(email)
 
-const createUserStmt = db.prepare('INSERT INTO users (email, password) VALUES (?, ?) RETURNING id')
+const createUserStmt = db.prepare(
+    'INSERT INTO users (email, password) VALUES (?, ?) RETURNING id'
+)
 export const createUser = (email, password) => {
-  try {
-    return createUserStmt.get(email, password).id
-  } catch (err) {
-    if (err instanceof sqlite.SqliteError && err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      return
+    try {
+        return createUserStmt.get(email, password).id
+    } catch (err) {
+        if (
+            err instanceof sqlite.SqliteError &&
+            err.code === 'SQLITE_CONSTRAINT_UNIQUE'
+        ) {
+            return
+        }
+        throw err
     }
-    throw err
-  }
 }
