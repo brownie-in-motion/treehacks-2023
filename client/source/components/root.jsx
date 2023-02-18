@@ -11,19 +11,8 @@ import {
 } from '@mantine/core'
 
 import { NavbarContent } from 'components/navbar'
-import { useLogin } from 'util'
 
 export const Root = ({ children, selected }) => {
-    const { failed, setFailed } = useLogin()
-    const navigate = useNavigate()
-
-    useEffect(() => {
-        if (failed) {
-            navigate('/register', { replace: true })
-            setFailed(false)
-        }
-    }, [failed])
-
     const theme = useMantineTheme()
     const [opened, setOpened] = useState(false)
     return (
@@ -75,4 +64,3 @@ export const Root = ({ children, selected }) => {
         </AppShell>
     )
 }
-

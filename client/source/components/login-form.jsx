@@ -38,17 +38,15 @@ export const LoginForm = ({ register }) => {
 
     const form = useForm(choice.form)
     const navigate = useNavigate()
-    const { setToken, setFailed } = useLogin()
+    const { setToken } = useLogin()
     const [data, fetch] = useFetcher(choice.path)
 
     useEffect(() => {
         if (data.data) {
-            setFailed(false)
-            console.log(data.data.token)
             setToken(data.data.token)
             navigate('/')
         }
-    }, [data.data])
+    }, [data])
 
     const extra = register
         ? {

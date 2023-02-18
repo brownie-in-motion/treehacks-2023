@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { MantineProvider } from '@mantine/core'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 
-import { LoginProvider } from 'util'
+import { RequireAuth, LoginProvider } from 'util'
 
 import { HomePage } from 'routes/home'
 import { LoginPage } from 'routes/login'
@@ -17,9 +17,9 @@ const router = createBrowserRouter([
     { path: '/', element: <HomePage /> },
     { path: '/login', element: <LoginPage /> },
     { path: '/register', element: <RegisterPage /> },
-    { path: '/create', element: <CreatePage /> },
-    { path: '/scan', element: <ScanPage /> },
-    { path: '/group/:id', element: <GroupPage />, loader: groupLoader },
+    { path: '/create', element: <RequireAuth><CreatePage /></RequireAuth> },
+    { path: '/scan', element: <RequireAuth><ScanPage /></RequireAuth> },
+    { path: '/group/:id', element: <RequireAuth><GroupPage /></RequireAuth>, loader: groupLoader },
 ])
 
 createRoot(document.getElementById('root')).render(

@@ -1,4 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { Loader } from '@mantine/core'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { Navigate } from 'react-router-dom'
 
 const INVALID_EMAIL = 'Invalid email'
 const TOO_SHORT = 'Too short!'
@@ -62,28 +64,33 @@ export const useJsonFetcher = (url, options) => {
 
 const LoginContext = createContext()
 
-export const useToken = () => {
-    const [token, setToken] = useState(localStorage.getItem('token'))
-
-    useEffect(() => {
-        localStorage.setItem('token', token)
-    }, [token])
-
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'token') {
-            setToken(e.newValue)
-        }
-    })
-
-    return [token, setToken]
-}
-
 export const LoginProvider = ({ children }) => {
-    const [user, setUser] = useState(null)
-    const [token, setToken] = useToken()
-    const [failed, setFailed] = useState(false)
+    const [user, setUser] = useState()
+    const [token, setToken] = useState(localStorage.token)
 
     useEffect(() => {
+        const listener = (e) => {
+            if (e.key === 'token') {
+                setToken(e.newValue)
+            }
+        }
+        window.addEventListener('storage', listener)
+        return () => window.removeEventListener('storage', listener)
+    }, [])
+
+    const handleToken = useCallback((newToken) => {
+        setToken(newToken)
+        if (newToken === undefined) {
+            delete localStorage.token
+        } else {
+            localStorage.token = newToken
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!token) {
+            return
+        }
         void (async () => {
             const response = await fetch('/api/users/me', {
                 headers: {
@@ -94,19 +101,17 @@ export const LoginProvider = ({ children }) => {
                 credentials: 'include',
             })
             if (response.status === 200) {
-                setFailed(false)
                 setUser(await response.json())
             } else {
-                setFailed(true)
-                setToken('')
+                handleToken()
             }
         })()
-    }, [token])
+    }, [token, handleToken])
+
+    const context = useMemo(() => ({ user, token, setToken: handleToken }), [user, token, handleToken])
 
     return (
-        <LoginContext.Provider
-            value={{ failed, user, token, setFailed, setToken }}
-        >
+        <LoginContext.Provider value={context}>
             {children}
         </LoginContext.Provider>
     )
@@ -163,4 +168,15 @@ export const useFetcher = (route) => {
             }
         },
     ]
+}
+
+export const RequireAuth = ({ children }) => {
+    const { token, user } = useLogin()
+    if (!token) {
+        return <Navigate to="/register" />
+    }
+    if (token && !user) {
+        return <Loader />
+    }
+    return children
 }
