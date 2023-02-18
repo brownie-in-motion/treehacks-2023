@@ -7,8 +7,8 @@
         "server"
     ],
     "scripts": {
-        "start-client": "npm -w client run start",
-        "start-server": "npm -w server run start",
+        "start-client": "npm -w client start",
+        "start-server": "npm -w server start",
         "start": "concurrently npm:start-*"
     },
     "devDependencies": {
