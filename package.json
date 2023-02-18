@@ -1,0 +1,21 @@
+{
+    "name": "web",
+    "version": "0.0.0",
+    "private": true,
+    "workspaces": [
+        "client",
+        "server"
+    ],
+    "scripts": {
+        "start-client": "npm -w client run start",
+        "start-server": "npm -w server run start",
+        "start": "concurrently npm:start-*"
+    },
+    "devDependencies": {
+        "esbuild": "^0.17.7",
+        "nodemon": "^2.0.20"
+    },
+    "dependencies": {
+        "concurrently": "^7.6.0"
+    }
+}
