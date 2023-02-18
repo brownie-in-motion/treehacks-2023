@@ -8,12 +8,17 @@ db.exec(`
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL
+    password TEXT NOT NULL,
+    stripe_customer_id TEXT,
+    stripe_payment_method_id TEXT,
+    balance INTEGER NOT NULL DEFAULT 0
   ) STRICT;
+  CREATE INDEX IF NOT EXISTS users_stripe_customer_id ON users (stripe_customer_id);
 
   CREATE TABLE IF NOT EXISTS share_groups (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
+    description TEXT NOT NULL,
     spend_limit INTEGER NOT NULL,
     spend_limit_duration TEXT NOT NULL,
     card_token TEXT NOT NULL
@@ -44,13 +49,32 @@ db.exec(`
 
 const shareGroupEventTypes = {
     spend: 'spend',
+    pay: 'pay',
+    payError: 'payError',
 }
 
 const getUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?')
 export const getUserByEmail = (email) => getUserByEmailStmt.get(email)
 
-const getUserStmt = db.prepare('SELECT id, name, email FROM users WHERE id = ?')
-export const getUser = (id) => getUserStmt.get(id)
+const getUserByStripeCustomerIdStmt = db.prepare(
+    'SELECT * FROM users WHERE stripe_customer_id = ?'
+)
+export const getUserByStripeCustomerId = (stripeCustomerId) =>
+    getUserByStripeCustomerIdStmt.get(stripeCustomerId)
+
+const getUserStmt = db.prepare(
+    'SELECT * FROM users WHERE id = ?'
+)
+export const getUser = (id) => {
+    const u = getUserStmt.get(id)
+    return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        canPay: u.can_pay,
+        balance: u.balance,
+    }
+}
 
 const createUserStmt = db.prepare(
     'INSERT INTO users (email, name, password) VALUES (?, ?, ?) RETURNING id'
@@ -68,6 +92,24 @@ export const createUser = (email, name, password) => {
         throw err
     }
 }
+
+const updateUserStripeCustomerIdStmt = db.prepare(
+    'UPDATE users SET stripe_customer_id = ? WHERE id = ?'
+)
+export const updateUserStripeCustomerId = (userId, stripeCustomerId) =>
+    updateUserStripeCustomerIdStmt.run(stripeCustomerId, userId).changes > 0
+
+const updateUserStripePaymentMethodIdStmt = db.prepare(
+    'UPDATE users SET stripe_payment_method_id = ? WHERE id = ?'
+)
+export const updateUserStripePaymentMethodId = (id, stripePaymentMethodId) =>
+updateUserStripePaymentMethodIdStmt.run(id, stripePaymentMethodId).changes > 0
+
+const updateUserBalanceStmt = db.prepare(
+    'UPDATE users SET balance = balance + ? WHERE id = ?'
+)
+export const updateUserBalance = (id, change) =>
+    updateUserBalanceStmt.run(change, id).changes > 0
 
 const getShareGroupsForUserStmt = db.prepare(`
     WITH groups AS (
@@ -88,6 +130,22 @@ export const getShareGroupsForUser = (userId) =>
         memberCount: g.member_count,
     }))
 
+const getShareGroupPayabilityForUserStmt = db.prepare(`
+    WITH groups AS (
+        SELECT share_groups.*
+        FROM share_groups, share_group_members
+        WHERE share_group_members.user_id = ?
+            AND share_group_members.share_group_id = share_groups.id
+    )
+    SELECT groups.*, COUNT(users.id) = 0 AS is_payable
+    FROM groups, share_group_members, users
+    WHERE groups.id = share_group_members.share_group_id
+        AND share_group_members.user_id = users.id
+        AND users.stripe_payment_method_id IS NULL
+    GROUP BY groups.id
+`)
+export const getShareGroupPayabilityForUser = (userId) => getShareGroupPayabilityForUserStmt.all(userId)
+
 const getShareGroupStmt = db.prepare('SELECT * FROM share_groups WHERE id = ?')
 const getShareGroupMembersStmt = db.prepare(
     'SELECT share_group_members.*, users.name, users.email FROM share_group_members, users WHERE share_group_id = ? AND user_id = users.id'
@@ -106,6 +164,7 @@ export const getShareGroup = (id) => {
     const shareGroup = {
         id: sg.id,
         name: sg.name,
+        description: sg.description,
         cardToken: sg.card_token,
         spendLimit: sg.spend_limit,
         spendLimitDuration: sg.spend_limit_duration,
@@ -136,6 +195,7 @@ export const getShareGroup = (id) => {
     return shareGroup
 }
 
+
 export const isOwner = (group, user) => {
     return group.members.some((m) => m.user.id === user.id && m.isOwner)
 }
@@ -145,15 +205,16 @@ export const isMember = (group, user) => {
 }
 
 const createShareGroupStmt = db.prepare(
-    'INSERT INTO share_groups (name, card_token, spend_limit, spend_limit_duration) VALUES (?, ?, ?, ?) RETURNING id'
+    'INSERT INTO share_groups (name, description, card_token, spend_limit, spend_limit_duration) VALUES (?, ?, ?, ?, ?) RETURNING id'
 )
 const createShareGroupMemberStmt = db.prepare(
     'INSERT INTO share_group_members (user_id, share_group_id, is_owner, weight) VALUES (?, ?, ?, 1)'
 )
 export const createShareGroup = db.transaction(
-    (userId, name, cardToken, spendLimit, spendLimitDuration) => {
+    (userId, name, description, cardToken, spendLimit, spendLimitDuration) => {
         const { id } = createShareGroupStmt.get(
             name,
+            description,
             cardToken,
             spendLimit,
             spendLimitDuration
@@ -162,6 +223,9 @@ export const createShareGroup = db.transaction(
         return id
     }
 )
+
+const deleteShareGroupStmt = db.prepare('DELETE FROM share_groups WHERE id = ?')
+export const deleteShareGroup = (id) => deleteShareGroupStmt.run(id).changes > 0
 
 const getShareGroupByInviteCodeStmt = db.prepare(
     'SELECT share_groups.* FROM share_groups, share_group_invites WHERE code = ? AND share_group_id = share_groups.id'
@@ -220,6 +284,8 @@ const makeCreateShareGroupEvent = (type) => (userId, shareGroupId, data) =>
         type,
         JSON.stringify(data)
     )
+export const createShareGroupPayEvent = makeCreateShareGroupEvent(shareGroupEventTypes.pay)
+export const createShareGroupPayErrorEvent = makeCreateShareGroupEvent(shareGroupEventTypes.payError)
 
 const getShareGroupByCardTokenStmt = db.prepare(
     'SELECT id FROM share_groups WHERE card_token = ?'

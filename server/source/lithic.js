@@ -16,6 +16,18 @@ export const createCard = async ({ spendLimit, spendLimitDuration }) => {
     return card.token
 }
 
+export const updateCard = async (token, payable) => {
+    await lithic.cards.update(token, {
+        state: payable? 'OPEN' : 'PAUSED'
+    })
+}
+
+export const closeCard = async (token) => {
+    await lithic.cards.update(token, {
+        state: 'CLOSED'
+    })
+}
+
 export const getCardInfo = async (token) => {
     const card = await lithic.cards.retrieve(token)
     return {
@@ -27,26 +39,20 @@ export const getCardInfo = async (token) => {
 }
 
 export const verifySource = (transaction, headers) => {
-    const requestHmac = headers['x-lithic-hmac'];
+    const requestHmac = headers['x-lithic-hmac']
 
     const replacer = (_key, value) =>
         value instanceof Object && !(value instanceof Array)
             ? Object.keys(value)
                 .sort()
                 .reduce((sorted, key) => {
-                    sorted[key] = value[key];
-                    return sorted 
+                    sorted[key] = value[key]
+                    return sorted
                 }, {})
-            : value;  
+            : value
 
-    const requestJson = JSON.stringify(transaction, replacer);
-    const dataHmac = crypto.createHmac(
-        'sha256',
-        config.lithicKey
-    ).update(requestJson).digest('base64')
+    const requestJson = JSON.stringify(transaction, replacer)
+    const dataHmac = crypto.createHmac('sha256', config.lithicKey).update(requestJson).digest()
 
-    return crypto.timingSafeEqual(
-        Buffer.from(requestHmac),
-        Buffer.from(dataHmac)
-    )
+    return crypto.timingSafeEqual(dataHmac, Buffer.from(requestHmac, 'base64'))
 }

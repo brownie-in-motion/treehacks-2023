@@ -1,14 +1,14 @@
 import crypto from 'crypto'
 import { promisify } from 'util'
-import { Router } from 'express'
+import express, { Router } from 'express'
 import bodyParser from 'body-parser'
 import jwt from 'jsonwebtoken'
+import Stripe from 'stripe'
 import config from './config.js'
 import * as db from './db.js'
-import { createCard, getCardInfo } from './lithic.js'
+import * as lithic from './lithic.js'
 
 const router = Router()
-router.use(bodyParser.json())
 
 const scrypt = promisify(crypto.scrypt)
 const hashPassword = async (password) => {
@@ -38,6 +38,52 @@ const auth = (req, res, next) => {
     }
 }
 
+const stripe = Stripe(config.stripeKey)
+
+const updateLithicCardStatuses = async (userId) => {
+    const payability = db.getShareGroupPayabilityForUser(userId)
+    for (const { card_token, is_payable } of payability) {
+        await lithic.updateCard(card_token, is_payable)
+    }
+}
+
+router.post('/hooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+    const sig = req.headers['stripe-signature']
+    let event
+    try {
+        event = stripe.webhooks.constructEvent(req.body, sig, config.stripeWebhookSecret)
+    } catch {
+        res.status(400).json({ error: 'invalid signature' })
+        return
+    }
+    if (event.type === 'setup_intent.succeeded') {
+        const setupIntent = event.data.object
+        const user = db.getUserByStripeCustomerId(setupIntent.customer)
+        db.updateUserStripePaymentMethodId(user.id, setupIntent.payment_method)
+    } else if (event.type === 'payment_intent.succeeded') {
+        const paymentIntent = event.data.object
+        const user = db.getUserByStripeCustomerId(paymentIntent.customer)
+        db.updateUserBalance(user.id, -paymentIntent.amount)
+        db.createShareGroupPayEvent(user.id, user.share_group_id, {
+            amount: paymentIntent.amount,
+        })
+    } else if (event.type === 'payment_intent.payment_failed') {
+        const paymentIntent = event.data.object
+        const user = db.getUserByStripeCustomerId(paymentIntent.customer)
+        db.updateUserStripePaymentMethodId(user.id, null)
+        db.createShareGroupPayErrorEvent(user.id, user.share_group_id, {
+            amount: paymentIntent.amount,
+        })
+        await updateLithicCardStatuses(user.id)
+    } else {
+        res.status(400).json({ error: 'invalid event type' })
+        return
+    }
+    res.sendStatus(204)
+})
+
+router.use(bodyParser.json())
+
 router.post('/login', async (req, res) => {
     const { email, password } = req.body
     const user = db.getUserByEmail(normalizeEmail(email))
@@ -66,8 +112,26 @@ router.post('/register', async (req, res) => {
     res.json({ token: signToken(userId) })
 })
 
-router.get('/me', auth, (req, res) => {
+router.get('/users/me', auth, (req, res) => {
     res.json(req.user)
+})
+
+router.post('/users/me/pay/setup', auth, async (req, res) => {
+    let customerId = req.user.stripe_customer_id
+    if (!customerId) {
+        const customer = await stripe.customers.create({
+            email: req.user.email,
+            name: req.user.name,
+        })
+        customerId = customer.id
+        db.updateUser(req.user.id, { stripe_customer_id: customerId })
+    }
+    const setupIntent = await stripe.setupIntents.create({ customer: customerId })
+    res.json({ setupIntentSecret: setupIntent.client_secret })
+})
+
+router.post('/hooks/lithic', async (req, res) => {
+    // add event about transaction, update balances, create payment intents
 })
 
 router.get('/groups', auth, async (req, res) => {
@@ -76,16 +140,32 @@ router.get('/groups', auth, async (req, res) => {
 })
 
 router.post('/groups', auth, async (req, res) => {
-    const { name, spendLimit, spendLimitDuration } = req.body
-    const cardToken = await createCard({ spendLimit, spendLimitDuration })
+    const { name, description, spendLimit, spendLimitDuration } = req.body
+    const cardToken = await lithic.createCard({ spendLimit, spendLimitDuration })
     const groupId = db.createShareGroup(
         req.user.id,
         name,
+        description,
         cardToken,
         spendLimit,
         spendLimitDuration
     )
     res.json({ groupId })
+})
+
+router.delete('/groups/:id', auth, async (req, res) => {
+    const group = db.getShareGroup(req.params.id)
+    if (!group) {
+        res.status(404).json({ error: 'group not found' })
+        return
+    }
+    if (!db.isOwner(group, req.user)) {
+        res.status(403).json({ error: 'forbidden' })
+        return
+    }
+    await lithic.deleteCard(group.card_token)
+    db.deleteShareGroup(group.id)
+    res.json({ ok: true })
 })
 
 router.get('/groups/:id', auth, (req, res) => {
@@ -114,7 +194,7 @@ router.get('/groups/:id/card', auth, async (req, res) => {
         res.status(403).json({ error: 'forbidden' })
         return
     }
-    res.json(await getCardInfo(group.cardToken))
+    res.json(await lithic.getCardInfo(group.cardToken))
 })
 
 router.delete('/groups/:id/members/:userId', auth, (req, res) => {
