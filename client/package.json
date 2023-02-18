@@ -10,11 +10,15 @@
     "dependencies": {
         "@emotion/react": "^11.10.5",
         "@mantine/core": "^5.10.3",
-        "@mantine/hooks": "^5.10.3",
+        "@mantine/form": "^5.10.4",
+        "@mantine/hooks": "^5.10.4",
         "@tabler/icons-react": "^2.3.0",
         "monaco-editor": "^0.35.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.8.1"
+    },
+    "devDependencies": {
+        "esbuild": "^0.17.8"
     }
 }
