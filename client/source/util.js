@@ -1,6 +1,8 @@
 const INVALID_EMAIL = 'Invalid email'
-const TOO_SHORT = 'Password too short'
+const TOO_SHORT = 'Too short!'
 const DO_NOT_MATCH = 'Passwords do not match'
+const NO_LIMIT = 'Please choose a limit'
+const NO_DURATION = 'Please select a duration'
 
 export const loginForm = {
     initialValues: {
@@ -22,5 +24,20 @@ export const registerForm = {
         ...loginForm.validate,
         confirm: (value, values) =>
             value === values.password ? null : DO_NOT_MATCH,
+    },
+}
+
+export const createForm = {
+    initialValues: {
+        name: '',
+        description: '',
+        limit: 0,
+        duration: 0,
+    },
+    validate: {
+        name: (value) => value.length > 5 ? null : TOO_SHORT,
+        description: (value) => value.length > 5 ? null : TOO_SHORT,
+        limit: (value) => value > 0 ? null : NO_LIMIT,
+        duration: (value) => value > 0 ? null : NO_DURATION,
     },
 }
