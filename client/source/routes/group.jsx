@@ -1,12 +1,14 @@
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { Root } from 'components/root'
 import { useLoaderData } from 'react-router-dom'
 
 import {
     ActionIcon,
     Button,
+    Center,
     Container,
     Paper,
+    Popover,
     Grid,
     Group,
     Table,
@@ -158,19 +160,70 @@ const WeightEdit = ({ start, others, onUpdate, onCancel }) => {
     )
 }
 
+const Flash = ({ disabled, timeout, label, children, onChange }) => {
+    const [open, setOpen] = useState(false)
+    const [loading, setLoading] = useState(false)
+    return (
+        <Popover
+            width={200}
+            position="bottom"
+            withArrow
+            shadow="sm"
+            opened={open}
+            onChange={setOpen}
+        >
+            <Popover.Target>
+                <Button
+                    disabled={disabled}
+                    loading={loading}
+                    onClick={async () => {
+                        setLoading(true)
+                        await onChange()
+                        setLoading(false)
+                        setOpen(true)
+                        setTimeout(() => setOpen(false), timeout)
+                    }}
+                >
+                    {label}
+                </Button>
+            </Popover.Target>
+            <Popover.Dropdown>
+                <Text size="sm" color="gray">
+                    {children}
+                </Text>
+            </Popover.Dropdown>
+        </Popover>
+    )
+}
+
 export const GroupPage = () => {
     const id = useLoaderData()
     const [edit, setEdit] = useState(false)
-    const { user } = useLogin()
-    const [response, fetch] = useFetcher()
+    const { user, token } = useLogin()
+    const [response, fetcher] = useFetcher()
 
-    const reload = () => fetch(`/api/groups/${id}`, { method: 'GET' })
+    const copyInvite = useCallback(async () => {
+        const response = await fetch(`/api/groups/${id}/invites`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+        })
+        const { code } = await response.json()
+        const url = new URL(window.location.href)
+        url.pathname = `/invites/${code}/join`
+
+        await navigator.clipboard.writeText(url.toString())
+    }, [id, token])
+
+    const reload = () => fetcher(`/api/groups/${id}`, { method: 'GET' })
 
     useEffect(() => {
         reload()
     }, [id])
 
-    const { sorted, total, weight } = useMemo(() => {
+    const { sorted, total, me } = useMemo(() => {
         if (!user) return { sorted: [], total: 0 }
         if (!response.data) return { sorted: [], total: 0 }
 
@@ -180,7 +233,7 @@ export const GroupPage = () => {
             .filter((m) => m.user.id !== user.id)
             .reduce((acc, m) => acc + m.weight, 0)
         const me = members.find((m) => m.user.id === user.id)
-        return { sorted: members, total: others, weight: me.weight }
+        return { sorted: members, total: others, me }
     }, [response, user])
 
     return (
@@ -201,33 +254,46 @@ export const GroupPage = () => {
                     </Grid.Col>
                     <Grid.Col md={6} lg={6}>
                         <Paper p="xl" radius="md" withBorder>
-                            {edit ? (
-                                <WeightEdit
-                                    start={weight}
-                                    others={total}
-                                    onCancel={() => setEdit(false)}
-                                    onUpdate={async (weight) => {
-                                        await fetch(
-                                            `/api/groups/${id}/members/me`,
-                                            {
-                                                method: 'PATCH',
-                                                body: { weight },
-                                            }
-                                        )
-                                        await reload()
-                                        setEdit(false)
-                                    }}
-                                />
-                            ) : (
-                                sorted.length > 0 && (
+                            {sorted.length > 0 &&
+                                (edit ? (
+                                    <WeightEdit
+                                        start={me.weight}
+                                        others={total}
+                                        onCancel={() => setEdit(false)}
+                                        onUpdate={async (weight) => {
+                                            await fetcher(
+                                                `/api/groups/${id}/members/me`,
+                                                {
+                                                    method: 'PATCH',
+                                                    body: { weight },
+                                                }
+                                            )
+                                            await reload()
+                                            setEdit(false)
+                                        }}
+                                    />
+                                ) : (
                                     <MemberTable
                                         members={sorted}
                                         current={user.id}
                                         onEdit={() => setEdit(true)}
                                     />
-                                )
-                            )}
+                                ))}
                         </Paper>
+                        {me?.isOwner && (
+                            <Paper p="xl" radius="md" mt="md" withBorder>
+                                <Center>
+                                    <Flash
+                                        disabled={!user}
+                                        timeout={1000}
+                                        label="Add member"
+                                        onChange={copyInvite}
+                                    >
+                                        Copied invite link to clipboard!
+                                    </Flash>
+                                </Center>
+                            </Paper>
+                        )}
                     </Grid.Col>
                 </Grid>
             </Container>
