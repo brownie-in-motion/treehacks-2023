@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { useLocalStorage } from '@mantine/hooks'
 
 const INVALID_EMAIL = 'Invalid email'
 const TOO_SHORT = 'Too short!'
@@ -63,29 +62,51 @@ export const useJsonFetcher = (url, options) => {
 
 const LoginContext = createContext()
 
-export const LoginProvider = ({ children }) => {
-    const [user, setUser] = useState(null)
-    const [token, setToken] = useLocalStorage('token', null)
+export const useToken = () => {
+    const [token, setToken] = useState(localStorage.getItem('token'))
 
     useEffect(() => {
-        if (token) {
-            void (async () => {
-                const response = fetch('/api/users/me', {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
-                    method: 'GET',
-                    credentials: 'include',
-                })
-                if (response.ok) setUser(await response.json())
-                else setToken(null)
-            })()
+        localStorage.setItem('token', token)
+    }, [token])
+
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'token') {
+            setToken(e.newValue)
         }
+    })
+
+    return [token, setToken]
+}
+
+export const LoginProvider = ({ children }) => {
+    const [user, setUser] = useState(null)
+    const [token, setToken] = useToken()
+    const [failed, setFailed] = useState(false)
+
+    useEffect(() => {
+        void (async () => {
+            const response = await fetch('/api/users/me', {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                method: 'GET',
+                credentials: 'include',
+            })
+            if (response.status === 200) {
+                setFailed(false)
+                setUser(await response.json())
+            } else {
+                setFailed(true)
+                setToken('')
+            }
+        })()
     }, [token])
 
     return (
-        <LoginContext.Provider value={{ user, token, setUser, setToken }}>
+        <LoginContext.Provider
+            value={{ failed, user, token, setFailed, setToken }}
+        >
             {children}
         </LoginContext.Provider>
     )
@@ -99,7 +120,7 @@ export const useFetcher = (route) => {
         error: null,
         data: null,
     })
-    const [token] = useLocalStorage('token', null)
+    const { token } = useLogin()
 
     return [
         state,
@@ -113,7 +134,7 @@ export const useFetcher = (route) => {
                     headers: {
                         ...options.headers,
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
+                        Authorization: `Bearer ${token}`,
                     },
                     body: JSON.stringify(data),
                 })

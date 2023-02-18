@@ -14,12 +14,15 @@ import { NavbarContent } from 'components/navbar'
 import { useLogin } from 'util'
 
 export const Root = ({ children, selected }) => {
-    const { user } = useLogin()
+    const { failed, setFailed } = useLogin()
     const navigate = useNavigate()
 
     useEffect(() => {
-        if (!user) navigate('/register', { replace: true })
-    }, [user])
+        if (failed) {
+            navigate('/register', { replace: true })
+            setFailed(false)
+        }
+    }, [failed])
 
     const theme = useMantineTheme()
     const [opened, setOpened] = useState(false)
