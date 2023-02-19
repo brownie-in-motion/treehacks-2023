@@ -38,6 +38,10 @@ const RepayList = ({ repay, onSubmit }) => {
         setSelected(newSelected)
     }
 
+    const total = repay.items
+        .filter(it => selected.has(it.id))
+        .reduce((acc, it) => acc + it.owed, 0)
+
     return (
         <>
             <Table>
@@ -97,7 +101,7 @@ const RepayList = ({ repay, onSubmit }) => {
                         loading={state === 'loading'}
                         disabled={state == 'disabled'}
                     >
-                        {repay.owner.id === user.id ? 'Claim' : 'Pay for'}{' '}
+                        {repay.owner.id === user.id ? 'Claim' : `Pay $${(total / 100).toFixed(2)} for`}{' '}
                         {selected.size} {selected.size === 1 ? 'item' : 'items'}
                     </Button>
                 </Group>
@@ -155,24 +159,26 @@ export const RepayPage = () => {
                     )}
                 </Paper>
                 <Group>
-                    <Paper
-                        mt="md"
-                        p="md"
-                        radius="md"
-                        withBorder
-                        style={{ display: 'flex' }}
-                        grow={0}
-                        mx="auto"
-                    >
-                        <Group mx="auto">
-                            <Title order={1} size="h4">
-                                Join code:
-                            </Title>
-                            <Text>
-                                {response.data && response.data.inviteCode}
-                            </Text>
-                        </Group>
-                    </Paper>
+                    {response.data?.inviteCode && (
+                        <Paper
+                            mt="md"
+                            p="md"
+                            radius="md"
+                            withBorder
+                            style={{ display: 'flex' }}
+                            grow={0}
+                            mx="auto"
+                        >
+                            <Group mx="auto">
+                                <Title order={1} size="h4">
+                                    Join code:
+                                </Title>
+                                <Text>
+                                    {response.data.inviteCode}
+                                </Text>
+                            </Group>
+                        </Paper>
+                    )}
                     {response.data &&
                         response.data.owner.id === user.id &&
                         response.data.items.every((item) => item.paid) && (

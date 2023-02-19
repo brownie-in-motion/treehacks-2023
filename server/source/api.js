@@ -404,9 +404,7 @@ router.post('/repays', auth, hasPayment, async (req, res) => {
         res.status(400).json({ error: 'cannot process receipt' })
         return
     }
-    const inviteCode = (crypto.randomBytes(4).readUInt32LE() % 100000)
-        .toString()
-        .padStart(5, '0')
+    const inviteCode = (crypto.randomBytes(4).readUInt32LE() % 90000 + 10000).toString()
     const repayId = db.createRepayGroup(
         req.user.id,
         inviteCode,

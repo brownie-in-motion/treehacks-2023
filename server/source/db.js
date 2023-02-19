@@ -499,6 +499,6 @@ export const claimRepayGroupItem = (itemId, userId) =>
     claimRepayGroupItemStmt.run(userId, itemId)
 
 const payRepayGroupStmt = db.prepare(
-    'UPDATE repay_groups SET paid = TRUE WHERE id = ? AND paid = FALSE'
+    'UPDATE repay_groups SET paid = TRUE, invite_code = NULL WHERE id = ? AND paid = FALSE'
 )
 export const payRepayGroup = (groupId) => payRepayGroupStmt.run(groupId).changes > 0

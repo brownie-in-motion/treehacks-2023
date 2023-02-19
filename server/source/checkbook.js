@@ -15,7 +15,7 @@ export const send = async (user, amount) => {
       amount: amount / 100,
     }),
   })
-  if (res.status !== 200) {
+  if (res.status > 299 || res.status < 200) {
     throw new Error(`checkbook: ${res.status}`)
   }
 }

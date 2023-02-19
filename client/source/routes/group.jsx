@@ -19,6 +19,7 @@ import {
     UnstyledButton,
     NumberInput,
     useMantineTheme,
+    Tooltip,
 } from '@mantine/core'
 
 import { IconCrown, IconPencil, IconPlus, IconMinus } from '@tabler/icons-react'
@@ -324,7 +325,9 @@ export const GroupPage = () => {
                     <Grid.Col md={6} lg={6}>
                         <Container size={400}>
                             <CreditCard name="Company Name" group={id}>
-                                Virtual Card
+                                <Tooltip label={response?.data?.description}>
+                                    <Text>{response?.data?.name}: Virtual Card</Text>
+                                </Tooltip>
                             </CreditCard>
                         </Container>
                     </Grid.Col>
