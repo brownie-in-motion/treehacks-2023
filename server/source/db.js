@@ -9,10 +9,9 @@ db.exec(`
         name TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         password TEXT NOT NULL,
-        stripe_customer_id TEXT,
+        stripe_customer_id TEXT UNIQUE,
         stripe_payment_method_id TEXT
     ) STRICT;
-    CREATE INDEX IF NOT EXISTS users_stripe_customer_id ON users (stripe_customer_id);
 
     CREATE TABLE IF NOT EXISTS share_groups (
         id INTEGER PRIMARY KEY,
@@ -20,9 +19,8 @@ db.exec(`
         description TEXT NOT NULL,
         spend_limit INTEGER NOT NULL,
         spend_limit_duration TEXT NOT NULL,
-        card_token TEXT NOT NULL
+        card_token TEXT NOT NULL UNIQUE
     ) STRICT;
-    CREATE INDEX IF NOT EXISTS share_groups_card_token ON share_groups (card_token);
 
     CREATE TABLE IF NOT EXISTS share_group_members (
         share_group_id INTEGER NOT NULL REFERENCES share_groups ON DELETE CASCADE,
@@ -48,6 +46,31 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS lithic_transactions (
         id TEXT PRIMARY KEY,
         paid_share_balance INTEGER NOT NULL
+    ) STRICT, WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS repay_groups (
+        id INTEGER PRIMARY KEY,
+        invite_code TEXT,
+        owner_id INTEGER NOT NULL REFERENCES users,
+        total INTEGER NOT NULL,
+        date TEXT,
+        name TEXT,
+        paid INTEGER NOT NULL DEFAULT FALSE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS repay_group_items (
+        id INTEGER PRIMARY KEY,
+        repay_group_id INTEGER NOT NULL REFERENCES repay_groups ON DELETE CASCADE,
+        claimant_id INTEGER REFERENCES users,
+        description TEXT,
+        price INTEGER NOT NULL,
+        paid INTEGER NOT NULL DEFAULT FALSE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS repay_group_members (
+        repay_group_id INTEGER NOT NULL REFERENCES repay_groups ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users,
+        PRIMARY KEY (user_id, repay_group_id)
     ) STRICT, WITHOUT ROWID;
 `)
 
@@ -188,11 +211,13 @@ export const getShareGroup = (id) => {
         id: e.id,
         type: e.type,
         data: JSON.parse(e.data),
-        user: {
-            id: e.user_id,
-            name: e.name,
-            email: e.email,
-        },
+        user: e.user_id
+            ? {
+                  id: e.user_id,
+                  name: e.name,
+                  email: e.email,
+              }
+            : null,
     }))
     shareGroup.spent = shareGroup.events
         .filter((l) => l.type === shareGroupEventTypes.spend)
@@ -333,3 +358,145 @@ export const upsertLithicTransaction = db.transaction(
         return paidShareBalance - (transaction?.paid_share_balance ?? 0)
     }
 )
+
+const createRepayGroupStmt = db.prepare(
+    'INSERT INTO repay_groups (invite_code, owner_id, total, name, date) VALUES (?, ?, ?, ?, ?) RETURNING id'
+)
+const createRepayGroupMemberStmt = db.prepare(
+    'INSERT INTO repay_group_members (repay_group_id, user_id) VALUES (?, ?)'
+)
+const createRepayGroupItemStmt = db.prepare(
+    'INSERT INTO repay_group_items (repay_group_id, description, price) VALUES (?, ?, ?)'
+)
+export const createRepayGroup = db.transaction(
+    (ownerId, inviteCode, total, name, date, items) => {
+        const { id } = createRepayGroupStmt.get(
+            inviteCode,
+            ownerId,
+            total,
+            name,
+            date
+        )
+        createRepayGroupMemberStmt.run(id, ownerId)
+        for (const item of items) {
+            createRepayGroupItemStmt.run(id, item.description, item.price)
+        }
+        return id
+    }
+)
+
+const getRepayGroupStmt = db.prepare('SELECT * FROM repay_groups WHERE id = ?')
+const getRepayGroupItemsStmt = db.prepare(`
+    WITH items AS (
+        SELECT repay_group_items.*, users.name, users.email
+            FROM repay_group_items, users
+            WHERE repay_group_id = ? AND claimant_id = users.id
+        UNION SELECT *, NULL, NULL
+            FROM repay_group_items
+            WHERE repay_group_id = ? AND claimant_id IS NULL
+    ) SELECT * FROM items ORDER BY id DESC
+`)
+const getRepayGroupMembersStmt = db.prepare(
+    'SELECT repay_group_members.*, users.name, users.email FROM repay_group_members, users WHERE repay_group_id = ? AND user_id = users.id'
+)
+export const getRepayGroup = (id) => {
+    const g = getRepayGroupStmt.get(id)
+    if (!g) {
+        return
+    }
+    const owner = getUserStmt.get(g.owner_id)
+    const group = {
+        id: g.id,
+        inviteCode: g.invite_code,
+        paid: !!g.paid,
+        total: g.total,
+        date: g.date,
+        name: g.name,
+        owner: {
+            id: owner.id,
+            name: owner.name,
+            email: owner.email,
+        },
+    }
+    const items = getRepayGroupItemsStmt.all(id, id)
+    const subtotal = items.reduce((acc, it) => acc + it.price, 0)
+    const surcharge = group.total / subtotal
+    group.items = items.map((it) => ({
+        id: it.id,
+        description: it.description,
+        price: it.price,
+        paid: !!it.paid,
+        owed: Math.ceil(it.price * surcharge),
+        claimant: it.user_id
+            ? {
+                  id: it.user_id,
+                  name: it.name,
+                  email: it.email,
+              }
+            : null,
+    }))
+    group.members = getRepayGroupMembersStmt.all(id).map((m) => ({
+        id: m.user_id,
+        name: m.name,
+        email: m.email,
+    }))
+    return group
+}
+
+export const isRepayMember = (repayGroup, user) =>
+    repayGroup.members.some((m) => m.id === user.id)
+
+export const isRepayOwner = (repayGroup, user) =>
+    repayGroup.owner.id === user.id
+
+const getRepayGroupByInviteCodeStmt = db.prepare(
+    'SELECT id FROM repay_groups WHERE invite_code = ?'
+)
+export const joinRepayGroup = db.transaction((userId, code) => {
+    const group = getRepayGroupByInviteCodeStmt.get(code)
+    if (!group) {
+        return
+    }
+    try {
+        createRepayGroupMemberStmt.run(group.id, userId)
+    } catch (err) {
+        if (
+            err instanceof sqlite.SqliteError &&
+            err.code === 'SQLITE_CONSTRAINT_PRIMARYKEY'
+        ) {
+            return
+        }
+        throw err
+    }
+    return group.id
+})
+
+const getRepaysForUserStmt = db.prepare(`
+    SELECT repay_groups.*, users.name, users.email
+    FROM repay_groups, repay_group_members, users
+    WHERE repay_group_members.user_id = ?
+        AND repay_group_members.repay_group_id = repay_groups.id
+        AND repay_groups.owner_id = users.id
+`)
+export const getRepayGroupsForUser = (userId) =>
+    getRepaysForUserStmt.all(userId).map((r) => ({
+        name: r.name,
+        date: r.date,
+        id: r.id,
+        owner: {
+            id: r.owner_id,
+            name: r.name,
+            email: r.email,
+        },
+    }))
+
+const claimRepayGroupItemStmt = db.prepare(
+    'UPDATE repay_group_items SET claimant_id = ?, paid = TRUE WHERE id = ?'
+)
+export const claimRepayGroupItem = (userId, itemId) =>
+    claimRepayGroupItemStmt.run(itemId, userId)
+
+const payRepayGroupStmt = db.prepare(
+    'UPDATE repay_groups SET paid = TRUE WHERE id = ?'
+)
+export const payRepayGroup = (groupId) => payRepayGroupStmt.run(groupId)

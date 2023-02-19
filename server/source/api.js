@@ -1,11 +1,12 @@
-import crypto from 'crypto'
-import { promisify } from 'util'
-import express, { Router } from 'express'
 import bodyParser from 'body-parser'
+import crypto from 'crypto'
+import express, { Router } from 'express'
 import jwt from 'jsonwebtoken'
 import Stripe from 'stripe'
+import { promisify } from 'util'
 import config from './config.js'
 import * as db from './db.js'
+import * as documentAi from './documentai.js'
 import * as lithic from './lithic.js'
 
 const router = Router()
@@ -90,9 +91,15 @@ router.post(
                 res.status(404).json({ error: 'unknown customer' })
                 return
             }
-            db.createShareGroupPayEvent(user.id, paymentIntent.metadata.share_group_id, {
-                amount: paymentIntent.amount,
-            })
+            if (paymentIntent.metadata.share_group_id) {
+                db.createShareGroupPayEvent(
+                    user.id,
+                    paymentIntent.metadata.share_group_id,
+                    {
+                        amount: paymentIntent.amount,
+                    }
+                )
+            }
         } else if (event.type === 'payment_intent.payment_failed') {
             const paymentIntent = event.data.object
             const user = db.getUserByStripeCustomerId(paymentIntent.customer)
@@ -101,9 +108,13 @@ router.post(
                 return
             }
             db.updateUserStripePaymentMethodId(user.id, null)
-            db.createShareGroupPayErrorEvent(user.id, paymentIntent.metadata.share_group_id, {
-                amount: paymentIntent.amount,
-            })
+            db.createShareGroupPayErrorEvent(
+                user.id,
+                paymentIntent.metadata.share_group_id,
+                {
+                    amount: paymentIntent.amount,
+                }
+            )
             await updateLithicCardStatuses(user.id)
         } else {
             res.status(400).json({ error: 'invalid event type' })
@@ -113,7 +124,11 @@ router.post(
     }
 )
 
-router.use(bodyParser.json())
+router.use(
+    bodyParser.json({
+        limit: '40mb',
+    })
+)
 
 router.post('/login', async (req, res) => {
     const { email, password } = req.body
@@ -205,7 +220,7 @@ router.post('/hooks/lithic', async (req, res) => {
             statement_descriptor: req.body.merchant.descriptor,
             metadata: {
                 share_group_id: group.id,
-            }
+            },
         })
     }
     res.sendStatus(204)
@@ -376,9 +391,102 @@ router.post('/invites/:code/join', auth, hasPayment, (req, res) => {
     res.json({ groupId })
 })
 
-router.post('/groups/:id/payout', )
+router.get('/repays', auth, (req, res) => {
+    const repays = db.getRepayGroupsForUser(req.user.id)
+    res.json(repays)
+})
 
-// 404
+router.post('/repays', auth, hasPayment, async (req, res) => {
+    const { image } = req.body
+    const receipt = await documentAi.process(image)
+    if (!receipt) {
+        res.status(400).json({ error: 'cannot process receipt' })
+        return
+    }
+    const inviteCode = (crypto.randomBytes(4).readUInt32LE() % 100000)
+        .toString()
+        .padStart(5, '0')
+    const repayId = db.createRepayGroup(
+        req.user.id,
+        inviteCode,
+        receipt.total,
+        receipt.supplierName,
+        receipt.receiptDate,
+        receipt.items
+    )
+    res.json({ repayId })
+})
+
+router.get('/repays/:id', auth, (req, res) => {
+    const repay = db.getRepayGroup(req.params.id)
+    if (!repay) {
+        res.status(404).json({ error: 'repay not found' })
+        return
+    }
+    if (!db.isRepayMember(repay, req.user)) {
+        res.status(403).json({ error: 'forbidden' })
+        return
+    }
+    res.json(repay)
+})
+
+router.post('/repay-invites/:code/join', auth, hasPayment, (req, res) => {
+    const repayId = db.joinRepayGroup(req.user.id, req.params.code)
+    if (!repayId) {
+        res.status(400).json({ error: 'cannot join repay' })
+        return
+    }
+    res.json({ repayId })
+})
+
+router.post('/repays/:id/claim', auth, async (req, res) => {
+    const { itemIds } = req.body
+    const repay = db.getRepayGroup(req.params.id)
+    if (!repay) {
+        res.status(404).json({ error: 'repay not found' })
+        return
+    }
+    if (!db.isRepayMember(repay, req.user)) {
+        res.status(403).json({ error: 'forbidden' })
+        return
+    }
+    let amount = 0
+    for (const itemId of itemIds) {
+        const item = repay.items.find((it) => it.id === itemId)
+        if (!item) {
+            res.status(400).json({ error: 'invalid item id' })
+            return
+        }
+        if (item.paid || item.claimant?.id === repay.owner.id) {
+            res.status(400).json({ error: 'item already paid' })
+            return
+        }
+        amount += item.owed
+    }
+    if (!db.isRepayOwner(repay, req.user)) {
+        await stripe.paymentIntents.create({
+            amount,
+            currency: 'usd',
+            customer: req.user.stripeCustomerId,
+            payment_method: req.user.stripePaymentMethodId,
+            off_session: true,
+            confirm: true,
+            statement_descriptor_suffix: repay.name,
+            metadata: {
+                repay_item_ids: JSON.stringify(itemIds),
+            },
+        })
+    }
+    for (const id of itemIds) {
+        db.claimRepayGroupItem(req.user.id, id)
+    }
+    res.json({ ok: true })
+})
+
+router.post('/repays/:id/withdraw', auth, async (req, res) => {
+    res.json({ ok: true })
+})
+
 router.use((_req, res) => {
     res.status(404).json({ error: 'not found' })
 })
