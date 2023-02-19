@@ -54,5 +54,6 @@ export const verifySource = (transaction, headers) => {
     const requestJson = JSON.stringify(transaction, replacer)
     const dataHmac = crypto.createHmac('sha256', config.lithicKey).update(requestJson).digest()
 
+    if (dataHmac.length !== requestHmac.length) return false
     return crypto.timingSafeEqual(dataHmac, Buffer.from(requestHmac, 'base64'))
 }

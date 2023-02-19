@@ -41,8 +41,8 @@ export const createForm = {
         duration: undefined,
     },
     validate: {
-        name: (value) => (value.length > 5 ? null : TOO_SHORT),
-        description: (value) => (value.length > 5 ? null : TOO_SHORT),
+        name: (value) => (value.length > 0 ? null : TOO_SHORT),
+        description: (value) => (value.length > 0 ? null : TOO_SHORT),
         limit: (value) => (value > 0 ? null : NO_LIMIT),
         duration: (value) => value === null ? NO_DURATION : null,
     },

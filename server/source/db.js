@@ -10,8 +10,7 @@ db.exec(`
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
     stripe_customer_id TEXT,
-    stripe_payment_method_id TEXT,
-    balance INTEGER NOT NULL DEFAULT 0
+    stripe_payment_method_id TEXT
   ) STRICT;
   CREATE INDEX IF NOT EXISTS users_stripe_customer_id ON users (stripe_customer_id);
 
@@ -45,6 +44,11 @@ db.exec(`
     code TEXT PRIMARY KEY,
     share_group_id INTEGER NOT NULL REFERENCES share_groups ON DELETE CASCADE
   ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE IF NOT EXISTS lithic_transactions (
+    id TEXT PRIMARY KEY,
+    paid_share_balance INTEGER NOT NULL
+  ) STRICT, WITHOUT ROWID;
 `)
 
 const shareGroupEventTypes = {
@@ -72,7 +76,6 @@ export const getUser = (id) => {
         name: u.name,
         email: u.email,
         canPay: u.can_pay,
-        balance: u.balance,
     }
 }
 
@@ -104,12 +107,6 @@ const updateUserStripePaymentMethodIdStmt = db.prepare(
 )
 export const updateUserStripePaymentMethodId = (id, stripePaymentMethodId) =>
 updateUserStripePaymentMethodIdStmt.run(id, stripePaymentMethodId).changes > 0
-
-const updateUserBalanceStmt = db.prepare(
-    'UPDATE users SET balance = balance + ? WHERE id = ?'
-)
-export const updateUserBalance = (id, change) =>
-    updateUserBalanceStmt.run(change, id).changes > 0
 
 const getShareGroupsForUserStmt = db.prepare(`
     WITH groups AS (
@@ -290,6 +287,7 @@ export const createShareGroupPayErrorEvent = makeCreateShareGroupEvent(shareGrou
 const getShareGroupByCardTokenStmt = db.prepare(
     'SELECT id FROM share_groups WHERE card_token = ?'
 )
+export const getShareGroupByCardToken = (cardToken) => getShareGroupByCardTokenStmt.get(cardToken)
 export const createShareGroupSpendEvent = db.transaction((cardToken, data) => {
     const group = getShareGroupByCardTokenStmt.get(cardToken)
     if (!group) {
@@ -314,3 +312,16 @@ const deleteShareGroupInviteStmt = db.prepare(
 )
 export const deleteShareGroupInvite = (code, shareGroupId) =>
     deleteShareGroupInviteStmt.run(code, shareGroupId).changes > 0
+
+const upsertLithicTransactionStmt = db.prepare(`
+    INSERT INTO lithic_transactions (id, paid_share_balance)
+    VALUES (?, ?)
+    ON CONFLICT (id) DO UPDATE
+        SET paid_share_balance = excluded.paid_share_balance
+`)
+const getLithicTransactionStmt = db.prepare('SELECT * FROM lithic_transactions WHERE id = ?')
+export const upsertLithicTransaction = db.transaction((id, paidShareBalance) => {
+    const transaction = getLithicTransactionStmt.get(id)
+    upsertLithicTransactionStmt.run(id, paidShareBalance)
+    return paidShareBalance - (transaction?.paid_share_balance ?? 0)
+})
