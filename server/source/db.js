@@ -75,7 +75,7 @@ export const getUser = (id) => {
         id: u.id,
         name: u.name,
         email: u.email,
-        canPay: u.can_pay,
+        stripePaymentMethodId: u.stripe_payment_method_id,
     }
 }
 
