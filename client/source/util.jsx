@@ -1,4 +1,4 @@
-import { Modal, Loader } from '@mantine/core'
+import { Alert, Button, Group, Modal, Loader } from '@mantine/core'
 import {
     createContext,
     useContext,
@@ -7,9 +7,14 @@ import {
     useCallback,
     useMemo,
 } from 'react'
-import { Navigate } from 'react-router-dom'
+import { useLocation, Navigate } from 'react-router-dom'
 
-import { Elements, PaymentElement } from '@stripe/react-stripe-js'
+import {
+    useElements,
+    useStripe,
+    Elements,
+    PaymentElement,
+} from '@stripe/react-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 
 import { FullPage } from 'components/full-page'
@@ -186,16 +191,54 @@ export const useFetcher = () => {
     ]
 }
 
-const stripePromise = loadStripe('pk_test_TYooMQauvdEDq54NiTphI7jx')
+const StripeModal = () => {
+    const stripe = useStripe()
+    const elements = useElements()
+    const [error, setError] = useState(undefined)
+    const loc = useLocation()
+    return (
+        <Modal opened={true} withCloseButton={false}>
+            <PaymentElement />
+            <Group>
+                <Button
+                    disabled={!stripe}
+                    ml="auto"
+                    mt="md"
+                    onClick={async () => {
+                        if (!stripe || !elements) return
+                        const { error } = await stripe.confirmSetup({
+                            elements,
+                            confirmParams: {
+                                return_url: new URL(
+                                    loc.pathname,
+                                    origin
+                                ).toString(),
+                            },
+                        })
+                        if (error) setError(error.message)
+                    }}
+                >
+                    Save
+                </Button>
+            </Group>
+            {error && <Alert color="red" mt="md">{error}</Alert>}
+        </Modal>
+    )
+}
 
-const RequireStripe = ({ children, stripe }) => {
+const RequireStripe = ({ children, done }) => {
     const [response, fetcher] = useFetcher()
 
-    if (stripe) return children
+    if (done) return children
 
     useEffect(() => {
         fetcher('/api/users/me/pay/setup', { method: 'POST' })
     }, [])
+
+    const stripePromise = useMemo(() => {
+        if (!response.data) return
+        return loadStripe(response.data.stripePublishableKey)
+    }, [response])
 
     return (
         ((!response.data || response.loading) && (
@@ -209,9 +252,7 @@ const RequireStripe = ({ children, stripe }) => {
                     clientSecret: response.data.stripeSetupIntentSecret,
                 }}
             >
-                <Modal opened={true}>
-                    <PaymentElement />
-                </Modal>
+                <StripeModal />
                 {children}
             </Elements>
         )
@@ -227,7 +268,7 @@ export const RequireAuth = ({ children }) => {
         return <Loader />
     }
     return (
-        <RequireStripe stripe={!!user.stripePaymentMethodId}>
+        <RequireStripe done={!!user.stripePaymentMethodId}>
             {children}
         </RequireStripe>
     )

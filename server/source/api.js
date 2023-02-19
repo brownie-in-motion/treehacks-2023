@@ -46,7 +46,7 @@ const hasPayment = (req, res, next) => {
     }
 }
 
-const stripe = Stripe(config.stripeKey)
+const stripe = Stripe(config.stripeSecretKey)
 
 const updateLithicCardStatuses = async (userId) => {
     const payability = db.getShareGroupPayabilityForUser(userId)
@@ -132,7 +132,7 @@ router.post('/users/me/pay/setup', auth, async (req, res) => {
             name: req.user.name,
         })
         customerId = customer.id
-        db.updateUser(req.user.id, { stripe_customer_id: customerId })
+        db.updateUserStripeCustomerId(req.user.id, customerId)
     }
     const setupIntent = await stripe.setupIntents.create({ customer: customerId })
     res.json({
