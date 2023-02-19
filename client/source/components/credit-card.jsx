@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 
 import {
     AspectRatio,
@@ -8,6 +8,8 @@ import {
     Paper,
     useMantineTheme,
 } from '@mantine/core'
+
+import { useFetcher } from 'util'
 
 const Blurrable = ({ children, blur }) => {
     return (
@@ -33,16 +35,35 @@ const Label = ({ children }) => {
     )
 }
 
-export const CreditCard = ({ name, number, expiry, cvv, children }) => {
+export const CreditCard = ({ name, group, children }) => {
     const [revealed, setRevealed] = useState(false)
-    const segments = number.match(/.{1,4}/g)
+    const [{ number, expiry, cvv }, set] = useState({
+        number: '2222222222222222',
+        expiry: '22/2222',
+        cvv: '222',
+    })
+    const [data, fetcher] = useFetcher()
+    useEffect(() => {
+        if (data.data) {
+            set({
+                number: data.data.pan,
+                expiry: `${data.data.expMonth}/${data.data.expYear}`,
+                cvv: data.data.cvv,
+            })
+            setRevealed(true)
+        }
+    }, [data])
+    const segments = useMemo(() => number.match(/.{1,4}/g), [number])
     return (
         <Paper
             shadow="md"
             p="xl"
             radius="md"
             style={{ cursor: 'pointer' }}
-            onClick={() => setRevealed((r) => !r)}
+            onClick={async () => {
+                if (revealed) setRevealed(false)
+                else await fetcher(`/api/groups/${group}/card`)
+            }}
         >
             <AspectRatio ratio={1.8}>
                 <div

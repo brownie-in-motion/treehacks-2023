@@ -11,15 +11,68 @@ import { LoginPage } from 'routes/login'
 import { RegisterPage } from 'routes/register'
 import { CreatePage } from 'routes/create'
 import { ScanPage } from 'routes/scan'
+import { InvitePage, inviteLoader } from 'routes/invite'
 import { GroupPage, groupLoader } from 'routes/group'
 
 const router = createBrowserRouter([
-    { path: '/', element: <RequireAuth><HomePage /></RequireAuth> },
-    { path: '/login', element: <RequireUnauth><LoginPage /></RequireUnauth> },
-    { path: '/register', element: <RequireUnauth><RegisterPage /></RequireUnauth> },
-    { path: '/create', element: <RequireAuth><CreatePage /></RequireAuth> },
-    { path: '/scan', element: <RequireAuth><ScanPage /></RequireAuth> },
-    { path: '/group/:id', element: <RequireAuth><GroupPage /></RequireAuth>, loader: groupLoader },
+    {
+        path: '/',
+        element: (
+            <RequireAuth>
+                <HomePage />
+            </RequireAuth>
+        ),
+    },
+    {
+        path: '/login',
+        element: (
+            <RequireUnauth>
+                <LoginPage />
+            </RequireUnauth>
+        ),
+    },
+    {
+        path: '/register',
+        element: (
+            <RequireUnauth>
+                <RegisterPage />
+            </RequireUnauth>
+        ),
+    },
+    {
+        path: '/create',
+        element: (
+            <RequireAuth>
+                <CreatePage />
+            </RequireAuth>
+        ),
+    },
+    {
+        path: '/scan',
+        element: (
+            <RequireAuth>
+                <ScanPage />
+            </RequireAuth>
+        ),
+    },
+    {
+        path: '/invite/:id',
+        element: (
+            <RequireAuth>
+                <InvitePage />
+            </RequireAuth>
+        ),
+        loader: inviteLoader,
+    },
+    {
+        path: '/group/:id',
+        element: (
+            <RequireAuth>
+                <GroupPage />
+            </RequireAuth>
+        ),
+        loader: groupLoader,
+    },
 ])
 
 createRoot(document.getElementById('root')).render(

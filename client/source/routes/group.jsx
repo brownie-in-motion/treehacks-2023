@@ -212,7 +212,7 @@ export const GroupPage = () => {
         })
         const { code } = await response.json()
         const url = new URL(window.location.href)
-        url.pathname = `/invites/${code}/join`
+        url.pathname = `/invite/${code}`
 
         await navigator.clipboard.writeText(url.toString())
     }, [id, token])
@@ -228,7 +228,7 @@ export const GroupPage = () => {
         if (!response.data) return { sorted: [], total: 0 }
 
         const members = [...response.data.members]
-        members.sort((a, b) => a.name.localeCompare(b.name))
+        members.sort((a, b) => a.user.name.localeCompare(b.user.name))
         const others = members
             .filter((m) => m.user.id !== user.id)
             .reduce((acc, m) => acc + m.weight, 0)
@@ -242,13 +242,8 @@ export const GroupPage = () => {
                 <Grid spacing="xs">
                     <Grid.Col md={6} lg={6}>
                         <Container size={400}>
-                            <CreditCard
-                                name="John Doe"
-                                number="1234567890123456"
-                                expiry="01/23"
-                                cvv="123"
-                            >
-                                Group {id} Virtual Card
+                            <CreditCard name="Company Name" group={id}>
+                                Virtual Card
                             </CreditCard>
                         </Container>
                     </Grid.Col>
