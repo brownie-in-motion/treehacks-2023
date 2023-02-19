@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
+    Alert,
     ActionIcon,
     Button,
     Container,
@@ -8,6 +9,7 @@ import {
     Stack,
     Table,
     Title,
+    Text,
     Paper,
 } from '@mantine/core'
 import { IconCheck, IconSquare, IconSquareCheck } from '@tabler/icons-react'
@@ -15,6 +17,7 @@ import { IconCheck, IconSquare, IconSquareCheck } from '@tabler/icons-react'
 import { useLoaderData } from 'react-router-dom'
 
 import { Root } from 'components/root'
+import { useFetcher, useLogin } from 'util'
 
 export const repayLoader = ({ params }) => {
     return params.id
@@ -23,6 +26,7 @@ export const repayLoader = ({ params }) => {
 const RepayList = ({ repay, onSubmit }) => {
     const [selected, setSelected] = useState(new Set())
     const [state, setState] = useState('idle')
+    const { user } = useLogin()
 
     const toggle = (id) => {
         const newSelected = new Set(selected)
@@ -48,7 +52,7 @@ const RepayList = ({ repay, onSubmit }) => {
                 <tbody>
                     {repay.items.map((item) => (
                         <tr key={item.id}>
-                            <td>{item.name}</td>
+                            <td>{item.description}</td>
                             <td align="right">
                                 ${(item.price / 100).toFixed(2)}
                             </td>
@@ -56,7 +60,7 @@ const RepayList = ({ repay, onSubmit }) => {
                                 ${(item.owed / 100).toFixed(2)}
                             </td>
                             <td align="center">
-                                {item.claimed ? (
+                                {item.paid ? (
                                     <IconCheck size={16} color="green" />
                                 ) : (
                                     <ActionIcon
@@ -93,8 +97,8 @@ const RepayList = ({ repay, onSubmit }) => {
                         loading={state === 'loading'}
                         disabled={state == 'disabled'}
                     >
-                        {repay.owner ? 'Claim' : 'Pay for'} {selected.size}{' '}
-                        {selected.size === 1 ? 'item' : 'items'}
+                        {repay.owner.id === user.id ? 'Claim' : 'Pay for'}{' '}
+                        {selected.size} {selected.size === 1 ? 'item' : 'items'}
                     </Button>
                 </Group>
             )}
@@ -104,58 +108,64 @@ const RepayList = ({ repay, onSubmit }) => {
 
 export const RepayPage = () => {
     const id = useLoaderData()
+    const [response, fetcher] = useFetcher()
+    const [_response2, fetcher2] = useFetcher()
 
-    const repay = {
-        date: '2021-01-01',
-        supplier: 'Shake Shack',
-        owner: false,
-        items: [
-            {
-                name: 'shake',
-                price: 599,
-                owed: 721,
-                id: 1,
-                claimed: true,
-            },
-            {
-                name: 'shack',
-                price: 1099,
-                owed: 1204,
-                id: 2,
-                claimed: false,
-            },
-            {
-                name: 'fries',
-                price: 499,
-                owed: 600,
-                id: 3,
-                claimed: false,
-            },
-        ],
-    }
+    const reload = (id) => fetcher(`/api/repays/${id}`)
+
+    useEffect(() => {
+        reload(id)
+    }, [id])
 
     return (
         <Root selected="scan">
             <Container>
                 <Paper p="xl" radius="md" withBorder>
-                    <Stack>
-                        <Group>
-                            <Title order={1} size="h4">
-                                {repay.supplier}
-                            </Title>
-                            <Title order={1} size="h4" color="gray" ml="auto">
-                                {repay.date}
-                            </Title>
-                        </Group>
-                        <RepayList
-                            repay={repay}
-                            onSubmit={async () => {
-                                await new Promise((resolve) =>
-                                    setTimeout(resolve, 1000)
-                                )
-                            }}
-                        />
-                    </Stack>
+                    {response.data && (
+                        <Stack>
+                            <Group>
+                                <Title order={1} size="h4">
+                                    {response.data.name}
+                                </Title>
+                                <Title
+                                    order={1}
+                                    size="h4"
+                                    color="gray"
+                                    ml="auto"
+                                >
+                                    {response.data.date}
+                                </Title>
+                            </Group>
+                            <RepayList
+                                repay={response.data}
+                                onSubmit={async (selected) => {
+                                    await fetcher2(`/api/repays/${id}/claim`, {
+                                        method: 'POST',
+                                        body: { itemIds: Array.from(selected) },
+                                    })
+                                    await reload(id)
+                                }}
+                            />
+                        </Stack>
+                    )}
+                    {response.error && (
+                        <Alert color="red">{response.error.message}</Alert>
+                    )}
+                </Paper>
+                <Paper
+                    mt="md"
+                    p="xl"
+                    radius="md"
+                    withBorder
+                    style={{ width: 250, display: 'flex' }}
+                    mx="auto"
+                >
+                    <Group mx="auto">
+                        <Title order={1} size="h4">
+                            Join code:
+                        </Title>
+                        <Text>{response.data && response.data.inviteCode}</Text>
+                    </Group>
                 </Paper>
             </Container>
         </Root>

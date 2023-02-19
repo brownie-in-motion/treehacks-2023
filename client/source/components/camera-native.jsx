@@ -1,6 +1,6 @@
 import { Button } from '@mantine/core'
 
-export const CameraNative = ({ text, onData }) => {
+export const CameraNative = ({ text, onData, ...props }) => {
     return (
         <Button onClick={() => {
             const input = document.createElement('input')
@@ -19,6 +19,6 @@ export const CameraNative = ({ text, onData }) => {
             })
 
             input.click()
-        }}>{text}</Button>
+        }} {...props} >{text}</Button>
     )
 }
