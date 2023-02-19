@@ -1,6 +1,6 @@
 import config from './config.js'
 
-const endpoint = `https://${config.prd ? 'www' : 'demo'}.checkbook.io/v3/check/digital`
+const endpoint = `https://${config.prd ? 'www' : 'sandbox'}.checkbook.io/v3/check/digital`
 
 export const send = async (user, amount) => {
   const res = await fetch(endpoint, {

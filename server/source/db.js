@@ -427,9 +427,9 @@ export const getRepayGroup = (id) => {
         price: it.price,
         paid: !!it.paid,
         owed: Math.ceil(it.price * surcharge),
-        claimant: it.user_id
+        claimant: it.claimant_id
             ? {
-                  id: it.user_id,
+                  id: it.claimant_id,
                   name: it.name,
                   email: it.email,
               }
@@ -484,6 +484,7 @@ export const getRepayGroupsForUser = (userId) =>
         name: r.name,
         date: r.date,
         id: r.id,
+        paid: !!r.paid,
         owner: {
             id: r.owner_id,
             name: r.user_name,

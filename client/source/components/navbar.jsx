@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 
 import {
+    Navbar,
     Group,
     Stack,
     ThemeIcon,
@@ -12,6 +13,7 @@ import {
     IconCreditCard,
     IconToolsKitchen2,
     IconUsers,
+    IconUserCircle,
 } from '@tabler/icons-react'
 
 export const Option = ({ Icon, color, label, selected, path }) => {
@@ -61,17 +63,29 @@ export const NavbarContent = ({ selected }) => {
         },
     ]
     return (
-        <Stack spacing={0}>
-            {items.map(({ Icon, color, label, name, path }) => (
+        <>
+            <Stack spacing={0}>
+                {items.map(({ Icon, color, label, name, path }) => (
+                    <Option
+                        key={name}
+                        Icon={Icon}
+                        color={color}
+                        label={label}
+                        path={path}
+                        selected={selected === name}
+                    />
+                ))}
+            </Stack>
+            <Navbar.Section grow></Navbar.Section>
+            <Navbar.Section>
                 <Option
-                    key={name}
-                    Icon={Icon}
-                    color={color}
-                    label={label}
-                    path={path}
-                    selected={selected === name}
+                    Icon={IconUserCircle}
+                    color="gray"
+                    label="Log out"
+                    name="logout"
+                    path="/logout"
                 />
-            ))}
-        </Stack>
+            </Navbar.Section>
+        </>
     )
 }

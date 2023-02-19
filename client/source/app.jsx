@@ -14,6 +14,7 @@ import { ScanPage } from 'routes/scan'
 import { InvitePage, inviteLoader } from 'routes/invite'
 import { GroupPage, groupLoader } from 'routes/group'
 import { RepayPage, repayLoader } from 'routes/repay'
+import { LogoutPage } from 'routes/logout'
 
 const router = createBrowserRouter([
     {
@@ -82,6 +83,12 @@ const router = createBrowserRouter([
             </RequireAuth>
         ),
         loader: repayLoader,
+    },
+    {
+        path: '/logout',
+        element: (
+            <LogoutPage />
+        ),
     },
 ])
 

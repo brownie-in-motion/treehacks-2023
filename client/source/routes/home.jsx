@@ -19,6 +19,11 @@ export const HomePage = () => {
             <Container size="md">
                 {data.data && (
                     <Stack spacing="md">
+                        {data.data.length === 0 && (
+                            <Alert color="blue">
+                                No groups found. Create one to get started!
+                            </Alert>
+                        )}
                         {data.data.map((group) => (
                             <GroupCard key={group.id} data={group} />
                         ))}
