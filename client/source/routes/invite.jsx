@@ -3,7 +3,7 @@ import { useNavigate, useLoaderData } from 'react-router-dom'
 
 import { Alert, Button, Text } from '@mantine/core'
 
-import { useFetcher } from 'util'
+import { useFetcher, durations } from 'util'
 import { FullPage } from 'components/full-page'
 
 export const inviteLoader = ({ params }) => {
@@ -31,8 +31,7 @@ export const InvitePage = () => {
         <>
             {data.data && (
                 <FullPage title={`Accept Invite: ${data.data.name}`}>
-                    <Text>Spend limit: {data.data.spendLimit / 100}</Text>
-                    <Text>Limit duration: {data.data.spendLimitDuration}</Text>
+                    <Text>Spend limit: ${(data.data.spendLimit / 100).toFixed(2)} {durations.find(d => d.value === data.data.spendLimitDuration).label}</Text>
                     <Button
                         onClick={() => {
                             fetcher2(`/api/invites/${id}/join`, {

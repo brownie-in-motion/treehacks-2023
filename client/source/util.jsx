@@ -289,3 +289,10 @@ export const RequireUnauth = ({ children }) => {
     }
     return children
 }
+
+export const durations = [
+    { label: 'every transaction', value: 'TRANSACTION' },
+    { label: 'every month', value: 'MONTHLY' },
+    { label: 'every year', value: 'ANNUALLY' },
+    { label: 'forever', value: 'FOREVER' },
+]

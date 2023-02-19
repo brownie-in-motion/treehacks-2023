@@ -18,20 +18,13 @@ import { useForm } from '@mantine/form'
 import { IconCurrencyDollar } from '@tabler/icons-react'
 
 import { Root } from 'components/root'
-import { useFetcher, createForm } from 'util'
+import { useFetcher, createForm, durations } from 'util'
 
 export const CreatePage = () => {
     const form = useForm(createForm)
     const navigate = useNavigate()
 
     const [data, fetch] = useFetcher()
-
-    const durations = [
-        { label: 'every transaction', value: 'TRANSACTION' },
-        { label: 'every month', value: 'MONTHLY' },
-        { label: 'every year', value: 'ANNUALLY' },
-        { label: 'forever', value: 'FOREVER' },
-    ]
 
     useEffect(() => {
         if (data.data) navigate(`/group/${data.data.groupId}`)
