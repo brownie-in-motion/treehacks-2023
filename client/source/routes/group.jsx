@@ -255,7 +255,9 @@ const InfoTabs = ({
                             <tbody>
                                 {transactions.map((transaction) => (
                                     <tr key={transaction.id}>
-                                        <td>${transaction.amount}</td>
+                                        <td>
+                                            ${transaction.amount.toFixed(2)}
+                                        </td>
                                         <td>{transaction.merchant}</td>
                                     </tr>
                                 ))}

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import {
     AppShell,
+    Group,
     Navbar,
     Header,
-    Text,
+    Title,
     MediaQuery,
     Burger,
     useMantineTheme,
@@ -55,7 +55,19 @@ export const Root = ({ children, selected }) => {
                                 mr="xl"
                             />
                         </MediaQuery>
-                        <Text>Split</Text>
+                        <Group spacing={0}>
+                            <MediaQuery
+                                smallerThan="sm"
+                                styles={{ display: 'none' }}
+                            >
+                                <img
+                                    src="/logo.svg"
+                                    alt="logo"
+                                    style={{ height: 30, marginRight: 10 }}
+                                />
+                            </MediaQuery>
+                            <Title size="h3">SplitPay</Title>
+                        </Group>
                     </div>
                 </Header>
             }

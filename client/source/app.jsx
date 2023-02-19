@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+// import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { MantineProvider } from '@mantine/core'
@@ -13,6 +13,7 @@ import { CreatePage } from 'routes/create'
 import { ScanPage } from 'routes/scan'
 import { InvitePage, inviteLoader } from 'routes/invite'
 import { GroupPage, groupLoader } from 'routes/group'
+import { RepayPage, repayLoader } from 'routes/repay'
 
 const router = createBrowserRouter([
     {
@@ -72,6 +73,15 @@ const router = createBrowserRouter([
             </RequireAuth>
         ),
         loader: groupLoader,
+    },
+    {
+        path: '/repay/:id',
+        element: (
+            <RequireAuth>
+                <RepayPage />
+            </RequireAuth>
+        ),
+        loader: repayLoader,
     },
 ])
 
