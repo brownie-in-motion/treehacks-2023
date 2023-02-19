@@ -76,11 +76,11 @@ const router = createBrowserRouter([
 ])
 
 createRoot(document.getElementById('root')).render(
-    <StrictMode>
-        <MantineProvider withGlobalStyles withNormalizeCSS>
-            <LoginProvider>
-                <RouterProvider router={router} />
-            </LoginProvider>
-        </MantineProvider>
-    </StrictMode>
+    // <StrictMode>
+    <MantineProvider withGlobalStyles withNormalizeCSS>
+        <LoginProvider>
+            <RouterProvider router={router} />
+        </LoginProvider>
+    </MantineProvider>
+    // </StrictMode>
 )

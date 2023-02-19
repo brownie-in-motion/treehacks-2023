@@ -191,7 +191,7 @@ export const useFetcher = () => {
     ]
 }
 
-const StripeModal = () => {
+const StripeModal = ({ setDone }) => {
     const stripe = useStripe()
     const elements = useElements()
     const [error, setError] = useState(undefined)
@@ -208,6 +208,7 @@ const StripeModal = () => {
                         if (!stripe || !elements) return
                         const { error } = await stripe.confirmSetup({
                             elements,
+                            redirect: 'if_required',
                             confirmParams: {
                                 return_url: new URL(
                                     loc.pathname,
@@ -216,6 +217,7 @@ const StripeModal = () => {
                             },
                         })
                         if (error) setError(error.message)
+                        else setDone(true)
                     }}
                 >
                     Save
@@ -226,19 +228,25 @@ const StripeModal = () => {
     )
 }
 
-const RequireStripe = ({ children, done }) => {
+const RequireStripe = ({ children, done: initDone }) => {
     const [response, fetcher] = useFetcher()
-
-    if (done) return children
+    const [done, setDone] = useState(initDone)
 
     useEffect(() => {
+        setDone(initDone)
+    }, [initDone])
+
+    useEffect(() => {
+        if (done) return
         fetcher('/api/users/me/pay/setup', { method: 'POST' })
     }, [])
 
     const stripePromise = useMemo(() => {
-        if (!response.data) return
+        if (done || !response.data) return
         return loadStripe(response.data.stripePublishableKey)
     }, [response])
+
+    if (done) return children
 
     return (
         ((!response.data || response.loading) && (
@@ -252,7 +260,7 @@ const RequireStripe = ({ children, done }) => {
                     clientSecret: response.data.stripeSetupIntentSecret,
                 }}
             >
-                <StripeModal />
+                <StripeModal setDone={setDone} />
                 {children}
             </Elements>
         )
@@ -265,7 +273,7 @@ export const RequireAuth = ({ children }) => {
         return <Navigate to="/register" />
     }
     if (token && !user) {
-        return <Loader />
+        return <FullPage title=""><Loader /></FullPage>
     }
     return (
         <RequireStripe done={!!user.stripePaymentMethodId}>

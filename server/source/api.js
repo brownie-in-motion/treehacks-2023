@@ -39,7 +39,7 @@ const auth = (req, res, next) => {
 }
 
 const hasPayment = (req, res, next) => {
-    if (req.user.payment_method_id) {
+    if (req.user.stripePaymentMethodId) {
         next()
     } else {
         res.status(400).json({ error: 'no payment method' })
@@ -55,40 +55,63 @@ const updateLithicCardStatuses = async (userId) => {
     }
 }
 
-router.post('/hooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
-    const sig = req.headers['stripe-signature']
-    let event
-    try {
-        event = stripe.webhooks.constructEvent(req.body, sig, config.stripeWebhookSecret)
-    } catch {
-        res.status(400).json({ error: 'invalid signature' })
-        return
+router.post(
+    '/hooks/stripe',
+    express.raw({ type: 'application/json' }),
+    async (req, res) => {
+        const sig = req.headers['stripe-signature']
+        let event
+        try {
+            event = stripe.webhooks.constructEvent(
+                req.body,
+                sig,
+                config.stripeWebhookSecret
+            )
+        } catch {
+            res.status(400).json({ error: 'invalid signature' })
+            return
+        }
+        if (event.type === 'setup_intent.succeeded') {
+            const setupIntent = event.data.object
+            const user = db.getUserByStripeCustomerId(setupIntent.customer)
+            if (!user) {
+                res.status(404).json({ error: 'unknown customer' })
+                return
+            }
+            db.updateUserStripePaymentMethodId(
+                user.id,
+                setupIntent.payment_method
+            )
+            await updateLithicCardStatuses(user.id)
+        } else if (event.type === 'payment_intent.succeeded') {
+            const paymentIntent = event.data.object
+            const user = db.getUserByStripeCustomerId(paymentIntent.customer)
+            if (!user) {
+                res.status(404).json({ error: 'unknown customer' })
+                return
+            }
+            db.createShareGroupPayEvent(user.id, paymentIntent.metadata.share_group_id, {
+                amount: paymentIntent.amount,
+            })
+        } else if (event.type === 'payment_intent.payment_failed') {
+            const paymentIntent = event.data.object
+            const user = db.getUserByStripeCustomerId(paymentIntent.customer)
+            if (!user) {
+                res.status(404).json({ error: 'unknown customer' })
+                return
+            }
+            db.updateUserStripePaymentMethodId(user.id, null)
+            db.createShareGroupPayErrorEvent(user.id, paymentIntent.metadata.share_group_id, {
+                amount: paymentIntent.amount,
+            })
+            await updateLithicCardStatuses(user.id)
+        } else {
+            res.status(400).json({ error: 'invalid event type' })
+            return
+        }
+        res.sendStatus(204)
     }
-    if (event.type === 'setup_intent.succeeded') {
-        const setupIntent = event.data.object
-        const user = db.getUserByStripeCustomerId(setupIntent.customer)
-        db.updateUserStripePaymentMethodId(user.id, setupIntent.payment_method)
-        await updateLithicCardStatuses(user.id)
-    } else if (event.type === 'payment_intent.succeeded') {
-        const paymentIntent = event.data.object
-        const user = db.getUserByStripeCustomerId(paymentIntent.customer)
-        db.createShareGroupPayEvent(user.id, user.share_group_id, {
-            amount: paymentIntent.amount,
-        })
-    } else if (event.type === 'payment_intent.payment_failed') {
-        const paymentIntent = event.data.object
-        const user = db.getUserByStripeCustomerId(paymentIntent.customer)
-        db.updateUserStripePaymentMethodId(user.id, null)
-        db.createShareGroupPayErrorEvent(user.id, user.share_group_id, {
-            amount: paymentIntent.amount,
-        })
-        await updateLithicCardStatuses(user.id)
-    } else {
-        res.status(400).json({ error: 'invalid event type' })
-        return
-    }
-    res.sendStatus(204)
-})
+)
 
 router.use(bodyParser.json())
 
@@ -125,7 +148,7 @@ router.get('/users/me', auth, (req, res) => {
 })
 
 router.post('/users/me/pay/setup', auth, async (req, res) => {
-    let customerId = req.user.stripe_customer_id
+    let customerId = req.user.stripeCustomerId
     if (!customerId) {
         const customer = await stripe.customers.create({
             email: req.user.email,
@@ -134,10 +157,12 @@ router.post('/users/me/pay/setup', auth, async (req, res) => {
         customerId = customer.id
         db.updateUserStripeCustomerId(req.user.id, customerId)
     }
-    const setupIntent = await stripe.setupIntents.create({ customer: customerId })
+    const setupIntent = await stripe.setupIntents.create({
+        customer: customerId,
+    })
     res.json({
         stripePublishableKey: config.stripePublishableKey,
-        stripeSetupIntentSecret: setupIntent.client_secret
+        stripeSetupIntentSecret: setupIntent.client_secret,
     })
 })
 
@@ -152,25 +177,38 @@ router.post('/hooks/lithic', async (req, res) => {
         return
     }
     const { members } = db.getShareGroup(group.id)
-    const totalWeight = group.users.reduce((acc, u) => acc + u.weight, 0)
-    const shareCost = Math.ceil(total / totalWeight)
+    const totalWeight = members.reduce((acc, u) => acc + u.weight, 0)
+    const shareCost = Math.ceil(req.body.amount / totalWeight)
     const shareDifference = db.upsertLithicTransaction(group.id, shareCost)
+    if (shareDifference === 0) {
+        res.sendStatus(204)
+        return
+    }
+    db.createShareGroupSpendEvent(null, group.id, {
+        amount: req.body.amount,
+        merchant: req.body.merchant.descriptor,
+    })
     for (const member of members) {
         const amount = shareDifference * member.weight
         if (amount < 50) {
             // stripe minimum is $0.50
             continue
         }
+        const user = db.getUser(member.user.id)
         await stripe.paymentIntents.create({
             amount,
             currency: 'usd',
-            customer: user.stripe_customer_id,
-            payment_method: user.payment_method_id,
+            customer: user.stripeCustomerId,
+            payment_method: user.stripePaymentMethodId,
             off_session: true,
             confirm: true,
             statement_descriptor: req.body.merchant.descriptor,
+            metadata: {
+                share_group_id: group.id,
+            }
         })
     }
+    res.sendStatus(204)
 })
 
 router.get('/groups', auth, async (req, res) => {
@@ -180,7 +218,10 @@ router.get('/groups', auth, async (req, res) => {
 
 router.post('/groups', auth, hasPayment, async (req, res) => {
     const { name, description, spendLimit, spendLimitDuration } = req.body
-    const cardToken = await lithic.createCard({ spendLimit, spendLimitDuration })
+    const cardToken = await lithic.createCard({
+        spendLimit,
+        spendLimitDuration,
+    })
     const groupId = db.createShareGroup(
         req.user.id,
         name,
@@ -281,11 +322,7 @@ router.patch('/groups/:id/members/me', auth, (req, res) => {
         res.status(403).json({ error: 'forbidden' })
         return
     }
-    db.updateShareGroupMemberWeight(
-        req.user.id,
-        group.id,
-        weight
-    )
+    db.updateShareGroupMemberWeight(req.user.id, group.id, weight)
     res.json({ ok: true })
 })
 
@@ -338,6 +375,8 @@ router.post('/invites/:code/join', auth, hasPayment, (req, res) => {
     }
     res.json({ groupId })
 })
+
+router.post('/groups/:id/payout', )
 
 // 404
 router.use((_req, res) => {

@@ -4,51 +4,51 @@ const db = sqlite('./data/db.sqlite')
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
 db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    stripe_customer_id TEXT,
-    stripe_payment_method_id TEXT
-  ) STRICT;
-  CREATE INDEX IF NOT EXISTS users_stripe_customer_id ON users (stripe_customer_id);
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        stripe_customer_id TEXT,
+        stripe_payment_method_id TEXT
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS users_stripe_customer_id ON users (stripe_customer_id);
 
-  CREATE TABLE IF NOT EXISTS share_groups (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL,
-    spend_limit INTEGER NOT NULL,
-    spend_limit_duration TEXT NOT NULL,
-    card_token TEXT NOT NULL
-  ) STRICT;
-  CREATE INDEX IF NOT EXISTS share_groups_card_token ON share_groups (card_token);
+    CREATE TABLE IF NOT EXISTS share_groups (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        spend_limit INTEGER NOT NULL,
+        spend_limit_duration TEXT NOT NULL,
+        card_token TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS share_groups_card_token ON share_groups (card_token);
 
-  CREATE TABLE IF NOT EXISTS share_group_members (
-    share_group_id INTEGER NOT NULL REFERENCES share_groups ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users,
-    is_owner INTEGER NOT NULL,
-    weight INTEGER NOT NULL,
-    PRIMARY KEY (user_id, share_group_id)
-  ) STRICT, WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS share_group_members (
+        share_group_id INTEGER NOT NULL REFERENCES share_groups ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users,
+        is_owner INTEGER NOT NULL,
+        weight INTEGER NOT NULL,
+        PRIMARY KEY (user_id, share_group_id)
+    ) STRICT, WITHOUT ROWID;
 
-  CREATE TABLE IF NOT EXISTS share_group_events (
-    id INTEGER PRIMARY KEY,
-    share_group_id INTEGER NOT NULL REFERENCES share_groups ON DELETE CASCADE,
-    user_id INTEGER REFERENCES users,
-    type TEXT NOT NULL,
-    data TEXT NOT NULL
-  ) STRICT;
+    CREATE TABLE IF NOT EXISTS share_group_events (
+        id INTEGER PRIMARY KEY,
+        share_group_id INTEGER NOT NULL REFERENCES share_groups ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users,
+        type TEXT NOT NULL,
+        data TEXT NOT NULL
+    ) STRICT;
 
-  CREATE TABLE IF NOT EXISTS share_group_invites (
-    code TEXT PRIMARY KEY,
-    share_group_id INTEGER NOT NULL REFERENCES share_groups ON DELETE CASCADE
-  ) STRICT, WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS share_group_invites (
+        code TEXT PRIMARY KEY,
+        share_group_id INTEGER NOT NULL REFERENCES share_groups ON DELETE CASCADE
+    ) STRICT, WITHOUT ROWID;
 
-  CREATE TABLE IF NOT EXISTS lithic_transactions (
-    id TEXT PRIMARY KEY,
-    paid_share_balance INTEGER NOT NULL
-  ) STRICT, WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS lithic_transactions (
+        id TEXT PRIMARY KEY,
+        paid_share_balance INTEGER NOT NULL
+    ) STRICT, WITHOUT ROWID;
 `)
 
 const shareGroupEventTypes = {
@@ -66,9 +66,7 @@ const getUserByStripeCustomerIdStmt = db.prepare(
 export const getUserByStripeCustomerId = (stripeCustomerId) =>
     getUserByStripeCustomerIdStmt.get(stripeCustomerId)
 
-const getUserStmt = db.prepare(
-    'SELECT * FROM users WHERE id = ?'
-)
+const getUserStmt = db.prepare('SELECT * FROM users WHERE id = ?')
 export const getUser = (id) => {
     const u = getUserStmt.get(id)
     return {
@@ -76,6 +74,7 @@ export const getUser = (id) => {
         name: u.name,
         email: u.email,
         stripePaymentMethodId: u.stripe_payment_method_id,
+        stripeCustomerId: u.stripe_customer_id,
     }
 }
 
@@ -106,19 +105,20 @@ const updateUserStripePaymentMethodIdStmt = db.prepare(
     'UPDATE users SET stripe_payment_method_id = ? WHERE id = ?'
 )
 export const updateUserStripePaymentMethodId = (id, stripePaymentMethodId) =>
-updateUserStripePaymentMethodIdStmt.run(id, stripePaymentMethodId).changes > 0
+    updateUserStripePaymentMethodIdStmt.run(stripePaymentMethodId, id).changes >
+    0
 
 const getShareGroupsForUserStmt = db.prepare(`
     WITH groups AS (
         SELECT share_groups.*
-        FROM share_groups, share_group_members
-        WHERE share_group_members.user_id = ?
-            AND share_group_members.share_group_id = share_groups.id
+            FROM share_groups, share_group_members
+            WHERE share_group_members.user_id = ?
+                AND share_group_members.share_group_id = share_groups.id
     )
     SELECT groups.*, COUNT(share_group_members.user_id) AS member_count
-    FROM groups, share_group_members
-    WHERE groups.id = share_group_members.share_group_id
-    GROUP BY groups.id
+        FROM groups, share_group_members
+        WHERE groups.id = share_group_members.share_group_id
+        GROUP BY groups.id
 `)
 export const getShareGroupsForUser = (userId) =>
     getShareGroupsForUserStmt.all(userId).map((g) => ({
@@ -130,26 +130,35 @@ export const getShareGroupsForUser = (userId) =>
 const getShareGroupPayabilityForUserStmt = db.prepare(`
     WITH groups AS (
         SELECT share_groups.*
-        FROM share_groups, share_group_members
-        WHERE share_group_members.user_id = ?
-            AND share_group_members.share_group_id = share_groups.id
+            FROM share_groups, share_group_members
+            WHERE share_group_members.user_id = ?
+                AND share_group_members.share_group_id = share_groups.id
     )
     SELECT groups.*, COUNT(users.id) = 0 AS is_payable
-    FROM groups, share_group_members, users
-    WHERE groups.id = share_group_members.share_group_id
-        AND share_group_members.user_id = users.id
-        AND users.stripe_payment_method_id IS NULL
-    GROUP BY groups.id
+        FROM groups, share_group_members, users
+        WHERE groups.id = share_group_members.share_group_id
+            AND share_group_members.user_id = users.id
+            AND users.stripe_payment_method_id IS NULL
+        GROUP BY groups.id
 `)
-export const getShareGroupPayabilityForUser = (userId) => getShareGroupPayabilityForUserStmt.all(userId)
+export const getShareGroupPayabilityForUser = (userId) =>
+    getShareGroupPayabilityForUserStmt.all(userId)
 
 const getShareGroupStmt = db.prepare('SELECT * FROM share_groups WHERE id = ?')
-const getShareGroupMembersStmt = db.prepare(
-    'SELECT share_group_members.*, users.name, users.email FROM share_group_members, users WHERE share_group_id = ? AND user_id = users.id'
-)
-const getShareGroupEventsStmt = db.prepare(
-    'SELECT share_group_events.*, users.name, users.email FROM share_group_events, users WHERE share_group_id = ? AND user_id = users.id'
-)
+const getShareGroupMembersStmt = db.prepare(`
+    SELECT share_group_members.*, users.name, users.email
+        FROM share_group_members, users WHERE share_group_id = ? AND user_id = users.id
+`)
+const getShareGroupEventsStmt = db.prepare(`
+    WITH events AS (
+        SELECT share_group_events.*, users.name, users.email
+            FROM share_group_events, users
+            WHERE share_group_id = ? AND user_id = users.id
+        UNION SELECT *, NULL, NULL
+            FROM share_group_events
+            WHERE share_group_id = ? AND user_id IS NULL
+    ) SELECT * FROM events ORDER BY id DESC
+`)
 const getShareGroupInvitesStmt = db.prepare(
     'SELECT code FROM share_group_invites WHERE share_group_id = ?'
 )
@@ -175,7 +184,7 @@ export const getShareGroup = (id) => {
             email: m.email,
         },
     }))
-    shareGroup.events = getShareGroupEventsStmt.all(id).map((e) => ({
+    shareGroup.events = getShareGroupEventsStmt.all(id, id).map((e) => ({
         id: e.id,
         type: e.type,
         data: JSON.parse(e.data),
@@ -187,11 +196,10 @@ export const getShareGroup = (id) => {
     }))
     shareGroup.spent = shareGroup.events
         .filter((l) => l.type === shareGroupEventTypes.spend)
-        .reduce((acc, l) => acc + l.action.amount, 0)
+        .reduce((acc, l) => acc + l.data.amount, 0)
     shareGroup.invites = getShareGroupInvitesStmt.all(id)
     return shareGroup
 }
-
 
 export const isOwner = (group, user) => {
     return group.members.some((m) => m.user.id === user.id && m.isOwner)
@@ -281,25 +289,21 @@ const makeCreateShareGroupEvent = (type) => (userId, shareGroupId, data) =>
         type,
         JSON.stringify(data)
     )
-export const createShareGroupPayEvent = makeCreateShareGroupEvent(shareGroupEventTypes.pay)
-export const createShareGroupPayErrorEvent = makeCreateShareGroupEvent(shareGroupEventTypes.payError)
+export const createShareGroupPayEvent = makeCreateShareGroupEvent(
+    shareGroupEventTypes.pay
+)
+export const createShareGroupPayErrorEvent = makeCreateShareGroupEvent(
+    shareGroupEventTypes.payError
+)
+export const createShareGroupSpendEvent = makeCreateShareGroupEvent(
+    shareGroupEventTypes.spend
+)
 
 const getShareGroupByCardTokenStmt = db.prepare(
     'SELECT id FROM share_groups WHERE card_token = ?'
 )
-export const getShareGroupByCardToken = (cardToken) => getShareGroupByCardTokenStmt.get(cardToken)
-export const createShareGroupSpendEvent = db.transaction((cardToken, data) => {
-    const group = getShareGroupByCardTokenStmt.get(cardToken)
-    if (!group) {
-        return
-    }
-    createShareGroupEventStmt.run(
-        null,
-        group.id,
-        shareGroupEventTypes.spend,
-        JSON.stringify(data)
-    )
-})
+export const getShareGroupByCardToken = (cardToken) =>
+    getShareGroupByCardTokenStmt.get(cardToken)
 
 const createShareGroupInviteStmt = db.prepare(
     'INSERT INTO share_group_invites (code, share_group_id) VALUES (?, ?)'
@@ -319,9 +323,13 @@ const upsertLithicTransactionStmt = db.prepare(`
     ON CONFLICT (id) DO UPDATE
         SET paid_share_balance = excluded.paid_share_balance
 `)
-const getLithicTransactionStmt = db.prepare('SELECT * FROM lithic_transactions WHERE id = ?')
-export const upsertLithicTransaction = db.transaction((id, paidShareBalance) => {
-    const transaction = getLithicTransactionStmt.get(id)
-    upsertLithicTransactionStmt.run(id, paidShareBalance)
-    return paidShareBalance - (transaction?.paid_share_balance ?? 0)
-})
+const getLithicTransactionStmt = db.prepare(
+    'SELECT * FROM lithic_transactions WHERE id = ?'
+)
+export const upsertLithicTransaction = db.transaction(
+    (id, paidShareBalance) => {
+        const transaction = getLithicTransactionStmt.get(id)
+        upsertLithicTransactionStmt.run(id, paidShareBalance)
+        return paidShareBalance - (transaction?.paid_share_balance ?? 0)
+    }
+)
