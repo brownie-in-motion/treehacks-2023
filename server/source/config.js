@@ -9,5 +9,5 @@ export default {
     googleDocumentAiProcessor: process.env.GOOGLE_DOCUMENT_AI_PROCESSOR,
     checkbookApiKey: process.env.CHECKBOOK_API_KEY,
     checkbookApiSecret: process.env.CHECKBOOK_API_SECRET,
-    prd: process.env.NODE_ENV === 'production',
+    prd: false,
 }
