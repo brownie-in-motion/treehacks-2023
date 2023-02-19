@@ -479,7 +479,7 @@ router.post('/repays/:id/claim', auth, async (req, res) => {
         })
     }
     for (const id of itemIds) {
-        db.claimRepayGroupItem(req.user.id, id)
+        db.claimRepayGroupItem(id, req.user.id)
     }
     res.json({ ok: true })
 })

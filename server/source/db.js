@@ -473,10 +473,11 @@ export const joinRepayGroup = db.transaction((userId, code) => {
 
 const getRepaysForUserStmt = db.prepare(`
     SELECT repay_groups.*, users.name AS user_name, users.email AS user_email
-    FROM repay_groups, repay_group_members, users
-    WHERE repay_group_members.user_id = ?
-        AND repay_group_members.repay_group_id = repay_groups.id
-        AND repay_groups.owner_id = users.id
+        FROM repay_groups, repay_group_members, users
+        WHERE repay_group_members.user_id = ?
+            AND repay_group_members.repay_group_id = repay_groups.id
+            AND repay_groups.owner_id = users.id
+        ORDER BY id DESC
 `)
 export const getRepayGroupsForUser = (userId) =>
     getRepaysForUserStmt.all(userId).map((r) => ({
@@ -493,8 +494,8 @@ export const getRepayGroupsForUser = (userId) =>
 const claimRepayGroupItemStmt = db.prepare(
     'UPDATE repay_group_items SET claimant_id = ?, paid = TRUE WHERE id = ?'
 )
-export const claimRepayGroupItem = (userId, itemId) =>
-    claimRepayGroupItemStmt.run(itemId, userId)
+export const claimRepayGroupItem = (itemId, userId) =>
+    claimRepayGroupItemStmt.run(userId, itemId)
 
 const payRepayGroupStmt = db.prepare(
     'UPDATE repay_groups SET paid = TRUE WHERE id = ? AND paid = FALSE'
