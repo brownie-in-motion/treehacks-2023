@@ -12,6 +12,7 @@ import {
     Grid,
     Group,
     Table,
+    Tabs,
     Text,
     ThemeIcon,
     Stack,
@@ -196,6 +197,77 @@ const Flash = ({ disabled, timeout, label, children, onChange }) => {
     )
 }
 
+const InfoTabs = ({
+    me,
+    total,
+    fetcher,
+    setEdit,
+    reload,
+    edit,
+    sorted,
+    user,
+    transactions,
+    id,
+}) => {
+    return (
+        <Paper p="xl" radius="md" withBorder>
+            <Tabs defaultValue="members" variant="outline">
+                <Tabs.List>
+                    <Tabs.Tab value="members">Members</Tabs.Tab>
+                    <Tabs.Tab value="transactions">Transactions</Tabs.Tab>
+                </Tabs.List>
+                <Tabs.Panel value="members" pt="xl">
+                    {sorted.length > 0 &&
+                        (edit ? (
+                            <WeightEdit
+                                start={me.weight}
+                                others={total}
+                                onCancel={() => setEdit(false)}
+                                onUpdate={async (weight) => {
+                                    await fetcher(
+                                        `/api/groups/${id}/members/me`,
+                                        {
+                                            method: 'PATCH',
+                                            body: { weight },
+                                        }
+                                    )
+                                    await reload()
+                                    setEdit(false)
+                                }}
+                            />
+                        ) : (
+                            <MemberTable
+                                members={sorted}
+                                current={user.id}
+                                onEdit={() => setEdit(true)}
+                            />
+                        ))}
+                </Tabs.Panel>
+                <Tabs.Panel value="transactions" pt="xl">
+                    {transactions && (
+                        <Table>
+                            <thead>
+                                <tr>
+                                    <th>Amount</th>
+                                    <th>Merchant</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {transactions.map((transaction) => (
+                                    <tr key={transaction.id}>
+                                        <td>${transaction.amount}</td>
+                                        <td>{transaction.merchant}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </Table>
+                    )}
+                </Tabs.Panel>
+            </Tabs>
+        </Paper>
+    )
+}
+
 export const GroupPage = () => {
     const id = useLoaderData()
     const [edit, setEdit] = useState(false)
@@ -223,9 +295,9 @@ export const GroupPage = () => {
         reload()
     }, [id])
 
-    const { sorted, total, me } = useMemo(() => {
-        if (!user) return { sorted: [], total: 0 }
-        if (!response.data) return { sorted: [], total: 0 }
+    const { members, total, me, transactions } = useMemo(() => {
+        if (!user) return { members: [], total: 0 }
+        if (!response.data) return { members: [], total: 0 }
 
         const members = [...response.data.members]
         members.sort((a, b) => a.user.name.localeCompare(b.user.name))
@@ -233,7 +305,14 @@ export const GroupPage = () => {
             .filter((m) => m.user.id !== user.id)
             .reduce((acc, m) => acc + m.weight, 0)
         const me = members.find((m) => m.user.id === user.id)
-        return { sorted: members, total: others, me }
+        const transactions = [...response.data.events]
+            .filter((e) => e.type === 'spend')
+            .map((e) => ({
+                amount: e.data.amount / 100,
+                merchant: e.data.merchant,
+                id: e.id,
+            }))
+        return { members, total: others, me, transactions }
     }, [response, user])
 
     return (
@@ -248,33 +327,18 @@ export const GroupPage = () => {
                         </Container>
                     </Grid.Col>
                     <Grid.Col md={6} lg={6}>
-                        <Paper p="xl" radius="md" withBorder>
-                            {sorted.length > 0 &&
-                                (edit ? (
-                                    <WeightEdit
-                                        start={me.weight}
-                                        others={total}
-                                        onCancel={() => setEdit(false)}
-                                        onUpdate={async (weight) => {
-                                            await fetcher(
-                                                `/api/groups/${id}/members/me`,
-                                                {
-                                                    method: 'PATCH',
-                                                    body: { weight },
-                                                }
-                                            )
-                                            await reload()
-                                            setEdit(false)
-                                        }}
-                                    />
-                                ) : (
-                                    <MemberTable
-                                        members={sorted}
-                                        current={user.id}
-                                        onEdit={() => setEdit(true)}
-                                    />
-                                ))}
-                        </Paper>
+                        <InfoTabs
+                            me={me}
+                            total={total}
+                            fetcher={fetcher}
+                            setEdit={setEdit}
+                            reload={reload}
+                            edit={edit}
+                            sorted={members}
+                            user={user}
+                            transactions={transactions}
+                            id={id}
+                        />
                         {me?.isOwner && (
                             <Paper p="xl" radius="md" mt="md" withBorder>
                                 <Center>

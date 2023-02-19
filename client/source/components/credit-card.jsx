@@ -39,7 +39,7 @@ export const CreditCard = ({ name, group, children }) => {
     const [revealed, setRevealed] = useState(false)
     const [{ number, expiry, cvv }, set] = useState({
         number: '2222222222222222',
-        expiry: '22/2222',
+        expiry: '22/22',
         cvv: '222',
     })
     const [data, fetcher] = useFetcher()
@@ -47,7 +47,7 @@ export const CreditCard = ({ name, group, children }) => {
         if (data.data) {
             set({
                 number: data.data.pan,
-                expiry: `${data.data.expMonth}/${data.data.expYear}`,
+                expiry: `${data.data.expMonth}/${data.data.expYear.slice(2)}`,
                 cvv: data.data.cvv,
             })
             setRevealed(true)
