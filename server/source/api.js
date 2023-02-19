@@ -8,6 +8,7 @@ import config from './config.js'
 import * as db from './db.js'
 import * as documentAi from './documentai.js'
 import * as lithic from './lithic.js'
+import * as checkbook from './checkbook.js'
 
 const router = Router()
 
@@ -484,6 +485,27 @@ router.post('/repays/:id/claim', auth, async (req, res) => {
 })
 
 router.post('/repays/:id/withdraw', auth, async (req, res) => {
+    const repay = db.getRepayGroup(req.params.id)
+    if (!repay) {
+        res.status(404).json({ error: 'repay not found' })
+        return
+    }
+    if (!db.isRepayOwner(repay, req.user)) {
+        res.status(403).json({ error: 'forbidden' })
+        return
+    }
+    if (!repay.items.every(it => it.claimant.id === req.user.id || it.paid)) {
+        res.status(400).json({ error: 'repay not paid' })
+        return
+    }
+    if (!db.payRepayGroup(repay.id)) {
+        res.status(400).json({ error: 'repay already paid' })
+        return
+    }
+    const amount = repay.items.filter(it => it.claimant.id !== req.user.id).reduce((acc, it) => acc + it.owed, 0)
+    if (amount > 0) {
+        await checkbook.send(req.user, amount)
+    }
     res.json({ ok: true })
 })
 

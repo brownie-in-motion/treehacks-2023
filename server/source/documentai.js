@@ -26,7 +26,7 @@ export const process = async (dataUri) => {
   const items = lineItems.map(item => ({
     description: item.properties.find(pr => pr.type === 'line_item/description')?.mentionText,
     price: moneyToNumber(item.properties.find(pr => pr.type === 'line_item/amount')?.mentionText),
-  })).filter(it => it.price !== undefined)
+  })).filter(it => it.price !== undefined && it.description !== undefined)
   if (!total || lineItems.length === 0) {
     return
   }
