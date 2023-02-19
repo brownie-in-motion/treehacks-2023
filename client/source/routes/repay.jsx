@@ -46,7 +46,7 @@ const RepayList = ({ repay, onSubmit }) => {
                         <th>Item</th>
                         <th style={{ textAlign: 'right' }}>Price</th>
                         <th style={{ textAlign: 'right' }}>Owed</th>
-                        <th style={{ width: 1 }}>Claimed</th>
+                        <th style={{ width: 1 }}>Paid</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -108,8 +108,10 @@ const RepayList = ({ repay, onSubmit }) => {
 
 export const RepayPage = () => {
     const id = useLoaderData()
+    const { user } = useLogin()
     const [response, fetcher] = useFetcher()
     const [_response2, fetcher2] = useFetcher()
+    const [response3, fetcher3] = useFetcher()
 
     const reload = (id) => fetcher(`/api/repays/${id}`)
 
@@ -152,21 +154,57 @@ export const RepayPage = () => {
                         <Alert color="red">{response.error.message}</Alert>
                     )}
                 </Paper>
-                <Paper
-                    mt="md"
-                    p="xl"
-                    radius="md"
-                    withBorder
-                    style={{ width: 250, display: 'flex' }}
-                    mx="auto"
-                >
-                    <Group mx="auto">
-                        <Title order={1} size="h4">
-                            Join code:
-                        </Title>
-                        <Text>{response.data && response.data.inviteCode}</Text>
-                    </Group>
-                </Paper>
+                <Group>
+                    <Paper
+                        mt="md"
+                        p="md"
+                        radius="md"
+                        withBorder
+                        style={{ display: 'flex' }}
+                        grow={0}
+                        mx="auto"
+                    >
+                        <Group mx="auto">
+                            <Title order={1} size="h4">
+                                Join code:
+                            </Title>
+                            <Text>
+                                {response.data && response.data.inviteCode}
+                            </Text>
+                        </Group>
+                    </Paper>
+                    {response.data &&
+                        response.data.owner.id === user.id &&
+                        response.data.items.every((item) => item.paid) && (
+                            <Paper
+                                mt="md"
+                                p="md"
+                                radius="md"
+                                withBorder
+                                grow={0}
+                            >
+                                <Button
+                                    loading={response3.loading}
+                                    disabled={
+                                        response.data && response.data.paid
+                                    }
+                                    onClick={async () => {
+                                        await fetcher3(
+                                            `/api/repays/${id}/withdraw`,
+                                            {
+                                                method: 'POST',
+                                            }
+                                        )
+                                        await reload(id)
+                                    }}
+                                >
+                                    {response.data && response.data.paid
+                                        ? 'Withdrawn!'
+                                        : 'Close and withdraw'}
+                                </Button>
+                            </Paper>
+                        )}
+                </Group>
             </Container>
         </Root>
     )
