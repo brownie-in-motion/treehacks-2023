@@ -12,6 +12,8 @@
         "@mantine/core": "^5.10.3",
         "@mantine/form": "^5.10.4",
         "@mantine/hooks": "^5.10.4",
+        "@stripe/react-stripe-js": "^1.16.4",
+        "@stripe/stripe-js": "^1.46.0",
         "@tabler/icons-react": "^2.3.0",
         "monaco-editor": "^0.35.0",
         "react": "^18.2.0",

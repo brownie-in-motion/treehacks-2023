@@ -1,6 +1,43 @@
-import { Loader } from '@mantine/core'
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { Modal, Loader } from '@mantine/core'
+import {
+    createContext,
+    useContext,
+    useState,
+    useEffect,
+    useCallback,
+    useMemo,
+} from 'react'
 import { Navigate } from 'react-router-dom'
+
+import { Elements, PaymentElement } from '@stripe/react-stripe-js'
+import { loadStripe } from '@stripe/stripe-js'
+
+import { useFetcher } from 'util'
+
+const stripePromise = loadStripe('pk_test_TYooMQauvdEDq54NiTphI7jx')
+
+const RequireStripe = ({ children, stripe }) => {
+    const [response, fetcher] = useFetcher()
+
+    if (stripe) return children
+
+    useEffect(() => {
+        fetcher('/users/me/pay/setup', { method: 'POST' })
+    }, [])
+
+    return (
+        (response.loading && <Loader />) ||
+        <Elements
+            stripe={stripePromise}
+            options={{ clientSecret: response.data.stripeSetupIntentSecret }}
+        >
+            <Modal opened={true}>
+                <PaymentElement />
+            </Modal>
+            {children}
+        </Elements>
+    )
+}
 
 const INVALID_EMAIL = 'Invalid email'
 const TOO_SHORT = 'Too short!'
@@ -44,7 +81,7 @@ export const createForm = {
         name: (value) => (value.length > 0 ? null : TOO_SHORT),
         description: (value) => (value.length > 0 ? null : TOO_SHORT),
         limit: (value) => (value > 0 ? null : NO_LIMIT),
-        duration: (value) => value === null ? NO_DURATION : null,
+        duration: (value) => (value === null ? NO_DURATION : null),
     },
 }
 
@@ -108,7 +145,10 @@ export const LoginProvider = ({ children }) => {
         })()
     }, [token, handleToken])
 
-    const context = useMemo(() => ({ user, token, setToken: handleToken }), [user, token, handleToken])
+    const context = useMemo(
+        () => ({ user, token, setToken: handleToken }),
+        [user, token, handleToken]
+    )
 
     return (
         <LoginContext.Provider value={context}>
@@ -179,7 +219,11 @@ export const RequireAuth = ({ children }) => {
     if (token && !user) {
         return <Loader />
     }
-    return children
+    return (
+        <RequireStripe stripe={!!user.stripePaymentMethodId}>
+            children
+        </RequireStripe>
+    )
 }
 
 export const RequireUnauth = ({ children }) => {
