@@ -12,32 +12,7 @@ import { Navigate } from 'react-router-dom'
 import { Elements, PaymentElement } from '@stripe/react-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 
-import { useFetcher } from 'util'
-
-const stripePromise = loadStripe('pk_test_TYooMQauvdEDq54NiTphI7jx')
-
-const RequireStripe = ({ children, stripe }) => {
-    const [response, fetcher] = useFetcher()
-
-    if (stripe) return children
-
-    useEffect(() => {
-        fetcher('/users/me/pay/setup', { method: 'POST' })
-    }, [])
-
-    return (
-        (response.loading && <Loader />) ||
-        <Elements
-            stripe={stripePromise}
-            options={{ clientSecret: response.data.stripeSetupIntentSecret }}
-        >
-            <Modal opened={true}>
-                <PaymentElement />
-            </Modal>
-            {children}
-        </Elements>
-    )
-}
+import { FullPage } from 'components/full-page'
 
 const INVALID_EMAIL = 'Invalid email'
 const TOO_SHORT = 'Too short!'
@@ -211,6 +186,38 @@ export const useFetcher = () => {
     ]
 }
 
+const stripePromise = loadStripe('pk_test_TYooMQauvdEDq54NiTphI7jx')
+
+const RequireStripe = ({ children, stripe }) => {
+    const [response, fetcher] = useFetcher()
+
+    if (stripe) return children
+
+    useEffect(() => {
+        fetcher('/api/users/me/pay/setup', { method: 'POST' })
+    }, [])
+
+    return (
+        ((!response.data || response.loading) && (
+            <FullPage>
+                <Loader />
+            </FullPage>
+        )) || (
+            <Elements
+                stripe={stripePromise}
+                options={{
+                    clientSecret: response.data.stripeSetupIntentSecret,
+                }}
+            >
+                <Modal opened={true}>
+                    <PaymentElement />
+                </Modal>
+                {children}
+            </Elements>
+        )
+    )
+}
+
 export const RequireAuth = ({ children }) => {
     const { token, user } = useLogin()
     if (!token) {
@@ -221,7 +228,7 @@ export const RequireAuth = ({ children }) => {
     }
     return (
         <RequireStripe stripe={!!user.stripePaymentMethodId}>
-            children
+            {children}
         </RequireStripe>
     )
 }
